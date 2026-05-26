@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Together We Rise — Online Co-op Bible Adventure</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
+  :root{
+    --ink:#23203a; --gold:#ffd23f; --brick:#c8612f; --panel:#fff7e8;
+    --p2:#4d8cff; --p3:#46c66b; --p1:#ff5a5a;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0d1b2a;
+    font-family:'Fredoka',sans-serif;touch-action:none;user-select:none;-webkit-user-select:none;}
+  #app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  canvas{display:block;background:linear-gradient(180deg,#5ec8f0,#bdeeff);
+    image-rendering:pixelated;width:100%;height:100%;}
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:18px;z-index:10;overflow:auto;}
+  .screen.show{display:flex;}
+  .card{background:linear-gradient(180deg,#fff,#ffe9c2);border:6px solid var(--ink);
+    border-radius:22px;padding:24px 26px;box-shadow:0 10px 0 rgba(0,0,0,.35);max-width:540px;width:100%;}
+  h1{font-family:'Bungee',cursive;color:var(--brick);margin:0 0 4px;font-size:clamp(26px,7vw,48px);
+    text-shadow:3px 3px 0 var(--ink),-1px -1px 0 #fff;line-height:1;}
+  .sub{font-weight:700;color:var(--ink);font-size:clamp(13px,3.4vw,17px);margin:0 0 16px;opacity:.85;}
+  .verse{font-style:italic;color:#5a4a2a;font-size:13px;margin:10px 0 18px;}
+  button.big{font-family:'Bungee',cursive;font-size:clamp(15px,4.2vw,22px);color:#fff;
+    background:var(--p3);border:4px solid var(--ink);border-radius:16px;padding:13px 24px;cursor:pointer;
+    box-shadow:0 6px 0 #2c6e1a;transition:transform .06s,box-shadow .06s;margin:5px;}
+  button.big:active{transform:translateY(4px);box-shadow:0 2px 0 #2c6e1a;}
+  button.alt{background:var(--p2);box-shadow:0 6px 0 #2659b3;}
+  button.alt:active{box-shadow:0 2px 0 #2659b3;}
+  button.gold{background:var(--gold);color:var(--ink);box-shadow:0 6px 0 #c9a200;}
+  button.gold:active{box-shadow:0 2px 0 #c9a200;}
+  input.txt{width:100%;border:3px solid var(--ink);border-radius:10px;text-align:center;
+    font-family:'Fredoka';font-weight:700;font-size:18px;padding:10px;margin:8px 0;}
+  input.code{letter-spacing:6px;text-transform:uppercase;font-family:'Bungee';font-size:26px;}
+  .face{width:120px;height:120px;border-radius:50%;border:5px solid var(--ink);overflow:hidden;
+    background:#dfe7ef;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;margin:0 auto 6px;}
+  .face img,.face canvas{width:100%;height:100%;object-fit:cover;}
+  .face .ph{font-family:'Bungee';font-size:48px;}
+  .face .cam{position:absolute;bottom:2px;right:2px;background:var(--ink);color:#fff;border-radius:50%;
+    width:30px;height:30px;font-size:15px;display:flex;align-items:center;justify-content:center;}
+  .hint{font-size:12px;color:#6a5a3a;margin:8px 0;}
+  .colrow{display:flex;gap:8px;justify-content:center;margin:8px 0;}
+  .colpick{width:34px;height:34px;border-radius:50%;border:3px solid var(--ink);cursor:pointer;}
+  .colpick.sel{outline:3px solid var(--ink);outline-offset:2px;transform:scale(1.15);}
+  .qrbox{background:#fff;border:5px solid var(--ink);border-radius:16px;padding:12px;display:inline-block;margin:8px 0;}
+  .qrbox img{width:200px;height:200px;display:block;image-rendering:pixelated;}
+  .codebig{font-family:'Bungee';font-size:40px;color:var(--brick);letter-spacing:8px;margin:6px 0;}
+  .lobby-list{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:14px 0;}
+  .lp{display:flex;flex-direction:column;align-items:center;gap:4px;width:74px;}
+  .lp .mini{width:54px;height:54px;border-radius:50%;border:3px solid var(--ink);overflow:hidden;
+    display:flex;align-items:center;justify-content:center;font-family:'Bungee';font-size:20px;}
+  .lp .mini img,.lp .mini canvas{width:100%;height:100%;object-fit:cover;}
+  .lp small{font-weight:700;font-size:11px;color:var(--ink);max-width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .badge{display:inline-block;background:var(--ink);color:#fff;border-radius:10px;padding:2px 8px;font-size:10px;font-weight:700;}
+  .err{color:#c0392b;font-weight:700;font-size:13px;min-height:18px;}
+  .status{position:absolute;top:8px;left:8px;background:#fff7e8dd;border:3px solid var(--ink);
+    border-radius:14px;padding:4px 10px;font-size:12px;font-weight:700;z-index:8;display:none;}
+  .status.show{display:block;}
+  .status .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#46c66b;margin-right:5px;vertical-align:middle;}
+  .status.bad .dot{background:#c0392b;}
+
+  /* camera modal */
+  #cam{position:absolute;inset:0;background:rgba(10,12,24,.92);z-index:30;display:none;
+    flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:18px;}
+  #cam.show{display:flex;}
+  #cam video,#cam .shot{width:min(78vw,300px);height:min(78vw,300px);object-fit:cover;border-radius:50%;
+    border:6px solid #fff;background:#000;transform:scaleX(-1);}
+  #cam .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+  #cam p{color:#fff;font-weight:600;max-width:320px;font-size:13px;}
+
+  /* HUD + pads (reused from local build) */
+  #hud{position:absolute;top:0;left:0;right:0;display:none;justify-content:space-between;
+    align-items:flex-start;padding:8px 10px;z-index:8;pointer-events:none;}
+  #hud.show{display:flex;}
+  .roster{display:flex;gap:6px;flex-wrap:wrap;}
+  .chip{display:flex;align-items:center;gap:5px;background:#fff7e8dd;border:3px solid var(--ink);
+    border-radius:20px;padding:2px 9px 2px 2px;font-weight:700;font-size:12px;}
+  .chip .mini{width:24px;height:24px;border-radius:50%;border:2px solid var(--ink);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:Bungee}
+  .chip .mini img,.chip .mini canvas{width:100%;height:100%;object-fit:cover;}
+  .chip.done{background:var(--gold);}
+  .lvlbadge{background:var(--ink);color:#fff;border-radius:14px;padding:6px 12px;font-family:'Bungee';
+    font-size:13px;text-align:center;}
+  .lvlbadge small{display:block;font-family:'Fredoka';font-weight:600;font-size:10px;opacity:.8;}
+  #pads{position:absolute;left:0;right:0;bottom:0;display:none;justify-content:space-between;
+    align-items:flex-end;padding:14px 18px 18px;z-index:9;pointer-events:none;}
+  #pads.show{display:flex;}
+  .pad{pointer-events:auto;}
+  .dpad{display:flex;gap:14px;}
+  .ctl{width:74px;height:74px;border-radius:50%;border:4px solid var(--ink);background:#fff7e8ee;
+    font-family:'Bungee';font-size:26px;color:var(--ink);display:flex;align-items:center;justify-content:center;
+    box-shadow:0 5px 0 rgba(0,0,0,.3);cursor:pointer;}
+  .ctl:active,.ctl.on{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.3);background:var(--gold);}
+  .actcol{display:flex;flex-direction:column;gap:12px;align-items:center;}
+  .ctl.jump{background:var(--p3);color:#fff;width:84px;height:84px;}
+  .ctl.boost{background:var(--p1);color:#fff;font-size:15px;font-family:'Fredoka';font-weight:700;}
+
+  #banner{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    z-index:12;background:rgba(20,16,40,.55);text-align:center;padding:20px;}
+  #banner.show{display:flex;}
+  .bcard{background:#fff;border:6px solid var(--ink);border-radius:22px;padding:24px 28px;max-width:520px;
+    box-shadow:0 12px 0 rgba(0,0,0,.4);}
+  .bcard h2{font-family:'Bungee';color:var(--brick);margin:0 0 6px;font-size:clamp(22px,6vw,38px);}
+  .bcard .ref{font-family:'Bungee';color:var(--p2);font-size:14px;margin-bottom:8px;}
+  .bcard .vtext{font-style:italic;color:#3a3450;font-size:clamp(14px,4vw,18px);line-height:1.4;margin-bottom:8px;}
+  .bcard .teach{color:#5a4a2a;font-size:13px;margin-bottom:16px;}
+  .toast{position:absolute;top:64px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+    padding:8px 16px;border-radius:20px;font-weight:700;font-size:13px;z-index:11;opacity:0;transition:opacity .3s;
+    pointer-events:none;border:2px solid #fff;text-align:center;max-width:90vw;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv"></canvas>
+
+  <!-- LANDING -->
+  <div class="screen show" id="landing">
+    <div class="card">
+      <h1>Together We Rise</h1>
+      <p class="sub">Online co-op Bible adventure 🎮✝️</p>
+      <p class="verse">"Two are better than one… if either falls down, one can help the other up." — Ecclesiastes 4:9-10</p>
+      <button class="big gold" onclick="goCreate()">Host a Game</button>
+      <button class="big alt" onclick="goJoin()">Join a Game</button>
+      <p class="hint">One person hosts and shares the QR code. Everyone else scans it to join from their own phone.</p>
+    </div>
+  </div>
+
+  <!-- CHARACTER (shared by host & joiner) -->
+  <div class="screen" id="charScreen">
+    <div class="card">
+      <h1 style="font-size:clamp(22px,6vw,34px)" id="charTitle">Make Your Character</h1>
+      <div class="face" id="charFace" onclick="openCam()">
+        <div class="ph" id="charPh">?</div>
+        <div class="cam">📷</div>
+      </div>
+      <p class="hint">Tap to take a selfie 🤳 (or skip — you'll get a colored buddy)</p>
+      <input class="txt" id="charName" placeholder="Your name" maxlength="12">
+      <div class="colrow" id="colrow"></div>
+      <p class="err" id="charErr"></p>
+      <button class="big gold" id="charGo">Continue ▶</button>
+    </div>
+  </div>
+
+  <!-- JOIN CODE entry -->
+  <div class="screen" id="joinScreen">
+    <div class="card">
+      <h1 style="font-size:clamp(22px,6vw,34px)">Join a Game</h1>
+      <p class="hint">Enter the 4-letter room code from the host's screen:</p>
+      <input class="txt code" id="joinCode" placeholder="CODE" maxlength="4">
+      <p class="err" id="joinErr"></p>
+      <button class="big" onclick="submitJoin()">Join ▶</button>
+      <button class="big alt" onclick="backToLanding()">Back</button>
+    </div>
+  </div>
+
+  <!-- LOBBY -->
+  <div class="screen" id="lobby">
+    <div class="card">
+      <h1 style="font-size:clamp(20px,5.5vw,30px)">Game Lobby</h1>
+      <div id="hostLobby">
+        <p class="hint">Friends scan this to join:</p>
+        <div class="qrbox"><img id="qrImg" alt="QR code"></div>
+        <div class="codebig" id="lobbyCode">----</div>
+        <p class="hint">Or share the link — code works from any phone.</p>
+      </div>
+      <div id="joinerLobby" style="display:none">
+        <p class="sub">You're in! Waiting for the host to start… 🙌</p>
+        <div class="codebig" id="lobbyCodeJoiner">----</div>
+      </div>
+      <div class="lobby-list" id="lobbyList"></div>
+      <button class="big gold" id="startBtn" style="display:none" onclick="hostStart()">Start Game ▶</button>
+      <p class="hint" id="lobbyHint"></p>
+    </div>
+  </div>
+</div>
+
+<!-- CAMERA MODAL -->
+<div id="cam">
+  <p id="camMsg">Smile! Line up your face 😄</p>
+  <video id="video" autoplay playsinline></video>
+  <canvas class="shot" id="shot" style="display:none"></canvas>
+  <div class="row" id="camRow">
+    <button class="big" onclick="snap()">📸 Snap</button>
+    <button class="big alt" onclick="closeCam()">Cancel</button>
+  </div>
+  <div class="row" id="confirmRow" style="display:none">
+    <button class="big gold" onclick="useShot()">✓ Use it</button>
+    <button class="big alt" onclick="retake()">↺ Retake</button>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="roster" id="roster"></div>
+  <div class="lvlbadge" id="lvlbadge">LVL 1<small>—</small></div>
+</div>
+
+<!-- PADS -->
+<div id="pads">
+  <div class="pad dpad">
+    <div class="ctl" id="btnL">◀</div>
+    <div class="ctl" id="btnR">▶</div>
+  </div>
+  <div class="pad actcol">
+    <div class="ctl boost" id="btnBoost">BOOST</div>
+    <div class="ctl jump" id="btnJump">▲</div>
+  </div>
+</div>
+
+<div class="status" id="netStatus"><span class="dot"></span><span id="netText">connecting…</span></div>
+<div id="toast" class="toast"></div>
+
+<!-- BANNER -->
+<div id="banner">
+  <div class="bcard">
+    <div class="ref" id="bRef"></div>
+    <h2 id="bTitle"></h2>
+    <p class="vtext" id="bVerse"></p>
+    <p class="teach" id="bTeach"></p>
+    <button class="big" id="bBtn" onclick="bannerNext()">Continue ▶</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+/* =============================================================================
+   TOGETHER WE RISE — ONLINE CLIENT
+   Two roles share this one file:
+     HOST   : runs the physics simulation, emits 'snapshot' ~20/sec.
+     JOINER : sends 'input', renders whatever snapshot arrives. No physics.
+   The server (server.js) just relays between them.
+   ============================================================================= */
+const socket = io({ transports:['websocket','polling'] });
+
+let myId=null, myRoom=null, isHost=false;
+let me = { name:'', color:'#4d8cff', face:null };   // face = data-URL string or null
+let lobbyPlayers = {};   // id -> {name,color,face}
+
+/* ---- net status indicator ---- */
+const netStatus=document.getElementById('netStatus'), netText=document.getElementById('netText');
+function setNet(txt,bad){ netStatus.classList.add('show'); netText.textContent=txt; netStatus.classList.toggle('bad',!!bad); }
+socket.on('connect',()=>{ myId=socket.id; setNet('online'); });
+socket.on('disconnect',()=>setNet('reconnecting…',true));
+socket.io.on('reconnect',()=>setNet('online'));
+
+/* ===================== CANVAS ===================== */
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){ DPR=Math.min(window.devicePixelRatio||1,2); W=innerWidth;H=innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);ctx.imageSmoothingEnabled=false; }
+addEventListener('resize',resize); resize();
+
+/* ===================== COLORS ===================== */
+const COLORS=['#ff5a5a','#4d8cff','#46c66b','#ffd23f','#b266ff','#ff8c42'];
+const COLNAME=['Red','Blue','Green','Gold','Violet','Orange'];
+
+/* ===================== SCREEN NAV ===================== */
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));
+  document.getElementById(id).classList.add('show'); }
+let flowMode='host';  // 'host' or 'join'
+function goCreate(){ flowMode='host'; buildColorRow(); document.getElementById('charTitle').textContent='Host — Make Your Character';
+  document.getElementById('charGo').textContent='Create Room ▶'; show('charScreen'); }
+function goJoin(){ flowMode='join'; show('joinScreen'); }
+function backToLanding(){ show('landing'); }
+function submitJoin(){
+  const code=document.getElementById('joinCode').value.toUpperCase().trim();
+  if(code.length!==4){ document.getElementById('joinErr').textContent='Enter the 4-letter code.'; return; }
+  pendingJoinCode=code; buildColorRow();
+  document.getElementById('charTitle').textContent='Make Your Character';
+  document.getElementById('charGo').textContent='Join Room ▶';
+  show('charScreen');
+}
+let pendingJoinCode=null;
+
+/* color picker */
+function buildColorRow(){
+  const row=document.getElementById('colrow'); row.innerHTML='';
+  COLORS.forEach((c,i)=>{ const d=document.createElement('div'); d.className='colpick'+(c===me.color?' sel':'');
+    d.style.background=c; d.onclick=()=>{ me.color=c; buildColorRow(); refreshCharFace(); };
+    row.appendChild(d); });
+}
+document.getElementById('charName').addEventListener('input',e=>{ me.name=e.target.value; refreshCharFace(); });
+function refreshCharFace(){
+  const ph=document.getElementById('charPh');
+  if(!me.face){ ph.style.display=''; ph.textContent = me.name? me.name[0].toUpperCase():'?'; ph.style.color=me.color; }
+}
+document.getElementById('charGo').onclick=()=>{
+  if(!me.name) me.name = flowMode==='host'?'Host':'Player';
+  if(flowMode==='host') doCreateRoom(); else doJoinRoom();
+};
+
+/* ===================== CAMERA ===================== */
+let stream=null, shotData=null;
+const video=document.getElementById('video'), shot=document.getElementById('shot');
+async function openCam(){
+  document.getElementById('cam').classList.add('show');
+  video.style.display='';shot.style.display='none';
+  document.getElementById('camRow').style.display='flex';
+  document.getElementById('confirmRow').style.display='none';
+  document.getElementById('camMsg').textContent='Smile! Line up your face 😄';
+  try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:480},height:{ideal:480}},audio:false});
+    video.srcObject=stream;
+  }catch(err){
+    document.getElementById('camMsg').textContent="Camera unavailable — no worries, you'll get a colored buddy. (Camera needs an https page.)";
+    document.getElementById('camRow').innerHTML='<button class="big alt" onclick="closeCam()">OK</button>';
+  }
+}
+function snap(){
+  const s=Math.min(video.videoWidth,video.videoHeight);
+  shot.width=160;shot.height=160;
+  const sx=(video.videoWidth-s)/2, sy=(video.videoHeight-s)/2, sc=shot.getContext('2d');
+  sc.save();sc.translate(160,0);sc.scale(-1,1);sc.drawImage(video,sx,sy,s,s,0,0,160,160);sc.restore();
+  video.style.display='none';shot.style.display='';
+  document.getElementById('camRow').style.display='none';
+  document.getElementById('confirmRow').style.display='flex';
+}
+function retake(){ video.style.display='';shot.style.display='none';
+  document.getElementById('camRow').style.display='flex';
+  document.getElementById('confirmRow').style.display='none'; }
+function useShot(){
+  // circular crop -> compact JPEG data-URL (kept small so it travels over the wire)
+  const c=document.createElement('canvas');c.width=96;c.height=96;const cc=c.getContext('2d');
+  cc.save();cc.beginPath();cc.arc(48,48,48,0,7);cc.clip();cc.drawImage(shot,0,0,96,96);cc.restore();
+  me.face=c.toDataURL('image/jpeg',0.7);
+  const f=document.getElementById('charFace');
+  [...f.querySelectorAll('img,canvas,.ph')].forEach(n=>n.remove());
+  const im=new Image();im.src=me.face;f.insertBefore(im,f.firstChild);
+  closeCam();
+}
+function closeCam(){ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  document.getElementById('cam').classList.remove('show');
+  document.getElementById('camRow').innerHTML='<button class="big" onclick="snap()">📸 Snap</button><button class="big alt" onclick="closeCam()">Cancel</button>'; }
+
+/* ===================== ROOM CREATE / JOIN ===================== */
+function doCreateRoom(){
+  socket.emit('createRoom', me, (res)=>{
+    if(!res||!res.ok){ document.getElementById('charErr').textContent='Could not create room.'; return; }
+    myRoom=res.code; isHost=true; enterLobby();
+    showQR();
+  });
+}
+function doJoinRoom(){
+  socket.emit('joinRoom', { code:pendingJoinCode, player:me }, (res)=>{
+    if(!res||!res.ok){ document.getElementById('charErr').textContent=res?res.error:'Join failed';
+      show('joinScreen'); document.getElementById('joinErr').textContent=res?res.error:'Join failed'; return; }
+    myRoom=res.code; isHost=false; enterLobby();
+  });
+}
+function enterLobby(){
+  show('lobby');
+  document.getElementById('hostLobby').style.display = isHost?'block':'none';
+  document.getElementById('joinerLobby').style.display = isHost?'none':'block';
+  document.getElementById('startBtn').style.display = isHost?'inline-block':'none';
+  document.getElementById('lobbyCode').textContent = myRoom;
+  document.getElementById('lobbyCodeJoiner').textContent = myRoom;
+  document.getElementById('lobbyHint').textContent = isHost
+    ? 'Start when everyone has joined. You can play with 1–6.'
+    : 'The host will start the game shortly.';
+}
+async function showQR(){
+  const link = location.origin + '/?room=' + myRoom;
+  try{
+    const r=await fetch('/qr?url='+encodeURIComponent(link));
+    const {png}=await r.json();
+    document.getElementById('qrImg').src=png;
+  }catch(e){ /* QR optional; code still works */ }
+}
+
+/* lobby roster updates from server */
+socket.on('playerList', ({hostId, players})=>{
+  lobbyPlayers=players;
+  const list=document.getElementById('lobbyList'); list.innerHTML='';
+  Object.entries(players).forEach(([id,p])=>{
+    const d=document.createElement('div'); d.className='lp';
+    const mini=document.createElement('div'); mini.className='mini'; mini.style.background=p.color;
+    if(p.face){ const im=new Image(); im.src=p.face; mini.appendChild(im); }
+    else { mini.textContent=(p.name||'?')[0].toUpperCase(); mini.style.color='#fff'; }
+    const nm=document.createElement('small'); nm.textContent=p.name + (id===hostId?' 👑':'') + (id===myId?' (you)':'');
+    d.appendChild(mini); d.appendChild(nm); list.appendChild(d);
+  });
+});
+socket.on('roomClosed', ({reason})=>{ alert(reason||'Room closed'); location.href=location.origin; });
+
+/* ===================== GAME (shared physics defs) ===================== */
+const TILE=48;
+const LEVELS=[
+ {ref:'Galatians 6:2',title:'The Bridge of Burdens',
+  verse:'"Carry each other’s burdens, and in this way you will fulfill the law of Christ."',
+  teach:'Some gaps are too wide to jump alone. Stand next to a teammate and tap BOOST to fling them across. Nobody finishes until EVERYONE reaches the flag.',
+  rows:["............................................","............................................","............................................",".....=........=.......=......................","............................................","..................................F.........","SSSS..XXXX.....XXX....XXXX....XXXXXXXXXXX....","XXXX..XXXX.....XXX....XXXX....XXXXXXXXXXX....","XXXX..XXXX.....XXX....XXXX....XXXXXXXXXXX...."],gimmick:'carry'},
+ {ref:'Isaiah 43:2',title:'The Rising Flood',
+  verse:'"When you pass through the waters, I will be with you; they will not sweep over you."',
+  teach:'The water keeps rising! Climb together and boost teammates who are stuck below — leave no one in the flood.',
+  rows:["............................................","..................................F.........","..............................XXXXXXXX......",".......................=....................","................=...........................",".........=..................................","....=.......................................","SSSS........................................","XXXX........................................"],gimmick:'flood'},
+ {ref:'Matthew 17:20',title:'The Mountain of Doubt',
+  verse:'"If you have faith as small as a mustard seed, you can say to this mountain, Move, and it will move."',
+  teach:'Boulders of doubt roll down. Time your climb, boost each other up the ledges, reach the peak together.',
+  rows:[".........................................F..",".....................................XXXXX..","................................=...........","..........................=.................","....................=.......................","..............=.............................","........=...................................","SSSS........................................","XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"],gimmick:'boulders'},
+ {ref:'Psalm 23:4',title:'The Valley of Shadow',
+  verse:'"Even though I walk through the valley of the shadow of death, I will fear no evil, for You are with me."',
+  teach:'It is dark here. Your light grows when you stay CLOSE together. Move as one to the light.',
+  rows:["............................................","............................................","..................................F.........","............................................","............................................","............................................","SSSS.......XXXX.....XXXX.....XXXXXXXXXX......","XXXX.......XXXX.....XXXX.....XXXXXXXXXX......","XXXXXXX....XXXX.....XXXX.....XXXXXXXXXX......"],gimmick:'dark'},
+ {ref:'Ecclesiastes 4:9-12',title:'The Final Climb',
+  verse:'"Though one may be overpowered, two can defend themselves. A cord of three strands is not quickly broken."',
+  teach:'Everything together now: boost, climb, and stay close. Get the WHOLE team to the top!',
+  rows:["...............................F............","...........................XXXXXX...........",".......................=....................","..............=.............................","........^.........=.........................","....=.......^...............................","SSSS....XXX.....XXX....XX....................","XXXX....XXX.....XXX....XX....................","XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"],gimmick:'mixed'}
+];
+const GRAV=0.9,MOVE=4.2,JUMP=-15.5,FRICTION=0.78,MAXFALL=18,BOOST_POWER=-21;
+
+let solids=[],hazards=[],spawn={x:0,y:0},flag={x:0,y:0},levelW=0,levelH=0;
+let waterY=0,boulders=[],lastBoulder=0,boostFx=[];
+let level=0, gameState='lobby', camX=0;
+
+function parseLevel(L){
+  solids=[];hazards=[];boulders=[];boostFx=[];
+  const rows=L.rows; levelH=rows.length*TILE; levelW=rows[0].length*TILE; let sx=null;
+  for(let r=0;r<rows.length;r++)for(let c=0;c<rows[r].length;c++){
+    const ch=rows[r][c],x=c*TILE,y=r*TILE;
+    if(ch==='X'||ch==='=')solids.push({x,y,w:TILE,h:TILE,plat:ch==='='});
+    else if(ch==='^')hazards.push({x:x+6,y:y+TILE-16,w:TILE-12,h:16});
+    else if(ch==='S'){ if(sx===null){sx=x;spawn={x,y};} }
+    else if(ch==='F')flag={x:x+TILE/2,y};
+  }
+  waterY = L.gimmick==='flood'? levelH-TILE*0.5 : levelH+TILE;
+  lastBoulder=0;
+}
+
+/* entities: on the HOST these are simulated; on a JOINER they are replaced each snapshot */
+let ents=[];   // {id,name,color,face(Image|null),x,y,w,h,vx,vy,onGround,done,initial}
+function makeEntsFromLobby(){
+  ents=[];
+  const ids=Object.keys(lobbyPlayers);
+  ids.forEach((id,i)=>{
+    const p=lobbyPlayers[id];
+    ents.push(mkEnt(id,p,i));
+  });
+}
+function mkEnt(id,p,i){
+  let img=null; if(p.face){ img=new Image(); img.src=p.face; }
+  return { id, name:p.name||COLNAME[i%6], color:p.color||COLORS[i%6], faceImg:img,
+    initial:(p.name?p.name[0].toUpperCase():String(i+1)),
+    x:spawn.x+i*12, y:spawn.y-4, w:30,h:40, vx:0,vy:0, onGround:false, done:false, face_t:Math.random()*6 };
+}
+
+/* ---- INPUT (local buttons -> my input object) ---- */
+const myInput={left:false,right:false,jump:false};
+let boostQueued=false;
+function bindHold(id,on,off){ const el=document.getElementById(id);
+  const d=e=>{e.preventDefault();el.classList.add('on');on();};
+  const u=e=>{if(e)e.preventDefault();el.classList.remove('on');off&&off();};
+  el.addEventListener('touchstart',d,{passive:false});el.addEventListener('touchend',u,{passive:false});
+  el.addEventListener('touchcancel',u);el.addEventListener('mousedown',d);addEventListener('mouseup',u); }
+function bindTap(id,fn){ const el=document.getElementById(id);
+  const d=e=>{e.preventDefault();el.classList.add('on');fn();};
+  el.addEventListener('touchstart',d,{passive:false});el.addEventListener('mousedown',d);
+  el.addEventListener('touchend',e=>{e.preventDefault();el.classList.remove('on');},{passive:false});
+  addEventListener('mouseup',()=>el.classList.remove('on')); }
+bindHold('btnL',()=>myInput.left=true,()=>myInput.left=false);
+bindHold('btnR',()=>myInput.right=true,()=>myInput.right=false);
+bindHold('btnJump',()=>myInput.jump=true,()=>myInput.jump=false);
+bindTap('btnBoost',()=>{ boostQueued=true; });
+addEventListener('keydown',e=>{ if(e.key==='ArrowLeft'||e.key==='a')myInput.left=true;
+  if(e.key==='ArrowRight'||e.key==='d')myInput.right=true;
+  if(e.key===' '||e.key==='ArrowUp'||e.key==='w'){myInput.jump=true;e.preventDefault();}
+  if(e.key==='Shift'||e.key==='e')boostQueued=true; });
+addEventListener('keyup',e=>{ if(e.key==='ArrowLeft'||e.key==='a')myInput.left=false;
+  if(e.key==='ArrowRight'||e.key==='d')myInput.right=false;
+  if(e.key===' '||e.key==='ArrowUp'||e.key==='w')myInput.jump=false; });
+
+/* the HOST collects everyone's inputs here, keyed by socket id */
+const remoteInputs={};               // id -> {left,right,jump}
+const remoteBoost={};                // id -> true when a boost is queued
+socket.on('input',({id,state})=>{ remoteInputs[id]=state.move; if(state.boost) remoteBoost[id]=true; });
+socket.on('playerJoined',({id,player})=>{ if(isHost && gameState==='play'){ lobbyPlayers[id]=player; ents.push(mkEnt(id,player,ents.length)); buildRoster(); } });
+socket.on('playerLeft',({id})=>{ if(isHost){ ents=ents.filter(e=>e.id!==id); delete remoteInputs[id]; buildRoster(); } });
+
+/* JOINER receives snapshots and host events */
+let lastSnap=null, snapPrev=null, snapT=0;
+socket.on('snapshot',(snap)=>{ if(isHost) return; snapPrev=lastSnap; lastSnap=snap; snapT=0;
+  // ensure entities exist & faces loaded
+  syncJoinerEnts(snap);
+});
+socket.on('hostEvent',(evt)=>{ if(isHost) return; handleHostEvent(evt); });
+
+function syncJoinerEnts(snap){
+  // build/refresh ents list to match snapshot ids
+  const byId={}; ents.forEach(e=>byId[e.id]=e);
+  ents = snap.e.map((s,i)=>{
+    let e=byId[s.id];
+    if(!e){ const p=lobbyPlayers[s.id]||{name:s.n,color:s.c}; e=mkEnt(s.id,p,i); }
+    return e;
+  });
+  level=snap.lv; if(LEVELS[level]) ensureLevelParsed();
+}
+let parsedLevelIdx=-1;
+function ensureLevelParsed(){ if(parsedLevelIdx!==level){ parseLevel(LEVELS[level]); parsedLevelIdx=level; } }
+
+/* ---- HOST: start game ---- */
+function hostStart(){
+  if(!isHost) return;
+  gameState='play'; level=0;
+  startLevelHost();
+  // tell joiners to switch into play + load level
+  socket.emit('hostEvent',{t:'start',level:0});
+  enterPlayUI();
+}
+function enterPlayUI(){
+  show('landing'); document.getElementById('landing').classList.remove('show'); // hide all cards
+  document.getElementById('hud').classList.add('show');
+  document.getElementById('pads').classList.add('show');
+}
+function startLevelHost(){
+  ensureLevelParsedForce();
+  makeEntsFromLobby();
+  buildRoster(); camX=0; gameState='banner';
+  showBanner('intro');
+}
+let _force=-1;
+function ensureLevelParsedForce(){ parseLevel(LEVELS[level]); parsedLevelIdx=level; }
+
+/* ===================== HOST SIM LOOP ===================== */
+function hostUpdate(dt){
+  if(gameState!=='play') return;
+  const L=LEVELS[level];
+  if(L.gimmick==='flood') waterY-=0.25;
+  if(L.gimmick==='boulders'||L.gimmick==='mixed'){ lastBoulder+=dt;
+    if(lastBoulder>1500){ lastBoulder=0; boulders.push({x:levelW-TILE,y:0,w:34,h:34,vx:-3.4,vy:0}); } }
+  boulders.forEach(b=>{ b.vy=Math.min(b.vy+GRAV,MAXFALL); b.x+=b.vx; b.y+=b.vy;
+    solids.forEach(s=>{ if(!s.plat&&aabb(b,s)&&b.vy>0){ b.y=s.y-b.h; b.vy=0; } }); });
+  boulders=boulders.filter(b=>b.x>-60&&b.y<levelH+80);
+
+  ents.forEach(e=>{
+    const inp = e.id===myId ? myInput : (remoteInputs[e.id]||{});
+    if(inp.left){e.vx=-MOVE;} else if(inp.right){e.vx=MOVE;} else e.vx*=FRICTION;
+    if(inp.jump && e.onGround){ e.vy=JUMP; e.onGround=false; }
+    // boosts
+    const wantBoost = (e.id===myId && boostQueued) || remoteBoost[e.id];
+    if(wantBoost){ tryBoost(e); }
+  });
+  boostQueued=false; for(const k in remoteBoost) delete remoteBoost[k];
+
+  ents.forEach(e=>{
+    e.vy=Math.min(e.vy+GRAV,MAXFALL);
+    e.x+=e.vx;
+    solids.forEach(s=>{ if(s.plat)return; if(aabb(e,s)){ if(e.vx>0)e.x=s.x-e.w; else if(e.vx<0)e.x=s.x+s.w; e.vx=0; } });
+    e.y+=e.vy; e.onGround=false;
+    solids.forEach(s=>{ if(aabb(e,s)){
+      if(e.vy>0 && (e.y+e.h-e.vy)<=s.y+6){ e.y=s.y-e.h; e.vy=0; e.onGround=true; }
+      else if(!s.plat && e.vy<0){ e.y=s.y+s.h; e.vy=0; } } });
+    if(e.x<0)e.x=0; if(e.x+e.w>levelW)e.x=levelW-e.w;
+    hazards.forEach(hz=>{ if(aabb(e,hz)) respawn(e); });
+    boulders.forEach(b=>{ if(aabb(e,b)) respawn(e); });
+    if(L.gimmick==='flood'&&e.y+e.h>waterY) respawn(e);
+    if(e.y>levelH+120) respawn(e);
+    if(!e.done && Math.abs((e.x+e.w/2)-flag.x)<TILE*0.6 && e.y<flag.y+TILE*2){ e.done=true; toast(e.name+' reached the flag! 🚩'); buildRoster(); }
+  });
+
+  if(ents.length && ents.every(e=>e.done)){ hostLevelComplete(); }
+
+  // camera: host follows the centroid of all players
+  let cx=0; ents.forEach(e=>cx+=e.x); cx = ents.length? cx/ents.length : 0;
+  const target=cx-W/2+15; camX+=(target-camX)*0.08; camX=Math.max(0,Math.min(camX,Math.max(0,levelW-W)));
+}
+function tryBoost(A){
+  let best=null,bd=1e9;
+  for(const e of ents){ if(e===A) continue;
+    const d=Math.hypot((e.x+e.w/2)-(A.x+A.w/2),(e.y+e.h/2)-(A.y+A.h/2));
+    if(d<TILE*2.2 && d<bd){bd=d;best=e;} }
+  if(best){ best.vy=BOOST_POWER; best.vx+=(best.x<A.x?-3:3); boostFx.push({x:A.x+A.w/2,y:A.y,t:0});
+    toast(A.name+' boosted '+best.name+'! 🙌'); socket.emit('hostEvent',{t:'fx',x:A.x+A.w/2,y:A.y}); }
+}
+function respawn(e){ e.x=spawn.x+(idx(e)*12); e.y=spawn.y-4; e.vx=0;e.vy=0;e.done=false; }
+function idx(e){ return ents.indexOf(e); }
+function aabb(a,b){ return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y; }
+
+function hostLevelComplete(){ if(gameState==='play'){ gameState='banner'; showBanner('complete'); socket.emit('hostEvent',{t:'banner',mode:'complete',level}); } }
+
+/* HOST builds + sends a compact snapshot ~20/sec */
+let snapAcc=0;
+function hostMaybeSnapshot(dt){
+  if(!isHost||gameState==='lobby') return;
+  snapAcc+=dt; if(snapAcc<50) return; snapAcc=0;
+  const snap={ lv:level, gs:gameState, w:Math.round(waterY),
+    e:ents.map(e=>({id:e.id,n:e.name,c:e.color,x:Math.round(e.x),y:Math.round(e.y),d:e.done?1:0,g:e.onGround?1:0})),
+    b:boulders.map(b=>({x:Math.round(b.x),y:Math.round(b.y)})) };
+  socket.emit('snapshot',snap);
+}
+
+/* JOINER applies snapshot to its ents for drawing (with light interpolation) */
+function joinerApply(){
+  if(isHost||!lastSnap) return;
+  const map={}; ents.forEach(e=>map[e.id]=e);
+  lastSnap.e.forEach(s=>{ const e=map[s.id]; if(!e) return;
+    // simple smoothing toward latest snapshot position
+    e.x += ((s.x)-e.x)*0.4; e.y += ((s.y)-e.y)*0.4; e.done=!!s.d; e.onGround=!!s.g; });
+  // boulders
+  boulders = lastSnap.b.map(b=>({x:b.x,y:b.y,w:34,h:34}));
+  waterY = lastSnap.w;
+  gameState='play';
+}
+
+/* ===================== HOST EVENTS (joiner side) ===================== */
+function handleHostEvent(evt){
+  if(evt.t==='start'){ level=evt.level; ensureLevelParsed(); makeJoinerEntsFromLobby(); enterPlayUI(); gameState='play';
+    showBanner('intro'); }
+  else if(evt.t==='banner'){ level=evt.level!==undefined?evt.level:level; showBanner(evt.mode); }
+  else if(evt.t==='nextlevel'){ level=evt.level; ensureLevelParsed(); document.getElementById('lvlbadge').innerHTML='LVL '+(level+1)+'<small>'+LEVELS[level].title+'</small>'; }
+  else if(evt.t==='fx'){ boostFx.push({x:evt.x,y:evt.y,t:0}); }
+  else if(evt.t==='win'){ showBanner('win'); }
+}
+function makeJoinerEntsFromLobby(){ makeEntsFromLobby(); buildRoster(); }
+
+/* ===================== BANNERS ===================== */
+let bannerMode='intro';
+function showBanner(mode){
+  bannerMode=mode; gameState='banner';
+  const L=LEVELS[level];
+  document.getElementById('lvlbadge').innerHTML='LVL '+(level+1)+'<small>'+L.title+'</small>';
+  document.getElementById('bRef').textContent=L.ref;
+  const bBtn=document.getElementById('bBtn');
+  if(mode==='intro'){ document.getElementById('bTitle').textContent=L.title;
+    document.getElementById('bVerse').textContent=L.verse; document.getElementById('bTeach').textContent=L.teach;
+    bBtn.textContent='Begin ▶'; }
+  else if(mode==='complete'){ document.getElementById('bTitle').textContent='Level Complete! 🎉';
+    document.getElementById('bVerse').textContent=L.verse;
+    document.getElementById('bTeach').textContent='You made it together. '+(level<LEVELS.length-1?'On to the next!':'');
+    bBtn.textContent= level<LEVELS.length-1?'Next Level ▶':'See the Ending ▶'; }
+  else if(mode==='win'){ document.getElementById('bRef').textContent='Ecclesiastes 4:12';
+    document.getElementById('bTitle').textContent='Together, You Rose! 👑';
+    document.getElementById('bVerse').textContent='"A cord of three strands is not quickly broken."';
+    document.getElementById('bTeach').textContent='Every level needed all of you — many parts, one team. Well done! 🙌';
+    bBtn.textContent='Back to Start ↺'; }
+  document.getElementById('banner').classList.add('show');
+  // only the host's button advances shared state; joiners' button just closes their own banner
+  bBtn.style.display = (isHost || mode==='intro') ? 'inline-block':'inline-block';
+}
+function bannerNext(){
+  document.getElementById('banner').classList.remove('show');
+  if(bannerMode==='intro'){ gameState='play'; if(isHost) socket.emit('hostEvent',{t:'banner_close'}); return; }
+  if(!isHost){ return; } // joiners can't drive level changes
+  if(bannerMode==='complete'){
+    if(level<LEVELS.length-1){ level++; ensureLevelParsedForce(); makeEntsFromLobby(); buildRoster(); camX=0; gameState='banner';
+      socket.emit('hostEvent',{t:'start',level}); showBanner('intro'); }
+    else { gameState='banner'; showBanner('win'); socket.emit('hostEvent',{t:'win'}); }
+  } else if(bannerMode==='win'){ location.href=location.origin; }
+}
+socket.on('hostEvent',(evt)=>{ if(!isHost && evt.t==='banner_close'){ document.getElementById('banner').classList.remove('show'); gameState='play'; } });
+
+/* ===================== ROSTER + TOAST ===================== */
+function buildRoster(){
+  const r=document.getElementById('roster'); r.innerHTML='';
+  ents.forEach(e=>{ const c=document.createElement('div'); c.className='chip'; c.style.borderColor=e.color; c.dataset.id=e.id;
+    const mini=document.createElement('div'); mini.className='mini'; mini.style.background=e.color;
+    if(e.faceImg){ mini.appendChild(e.faceImg.cloneNode()); } else { mini.textContent=e.initial; mini.style.color='#fff'; }
+    const s=document.createElement('span'); s.textContent=e.name+(e.id===myId?' (you)':'');
+    c.appendChild(mini); c.appendChild(s); r.appendChild(c); });
+}
+function refreshRosterDone(){ ents.forEach(e=>{ const c=document.querySelector('.chip[data-id="'+e.id+'"]'); if(c) c.classList.toggle('done',e.done); }); }
+let toastT=null;
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1600); refreshRosterDone(); }
+
+/* ===================== RENDER ===================== */
+let bgClouds=[]; for(let i=0;i<8;i++) bgClouds.push({x:Math.random()*2000,y:40+Math.random()*200,s:0.3+Math.random()*0.5});
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  if(gameState==='lobby') return;
+  const L=LEVELS[level]; if(!L) return;
+  drawClouds();
+  ctx.save();
+  const camY=Math.max(0,levelH-H);
+  ctx.translate(-camX,-camY);
+  solids.forEach(s=>{ if(s.plat){ roundRect(s.x,s.y,s.w,s.h-18,8,'#caa15a','#7a5a22'); }
+    else { ctx.fillStyle='#7a4a23';ctx.fillRect(s.x,s.y,s.w,s.h);
+      ctx.fillStyle='#8b5a2b';ctx.fillRect(s.x+3,s.y+3,s.w-6,s.h-6);
+      ctx.fillStyle='#5bbf3a';ctx.fillRect(s.x,s.y,s.w,8);
+      ctx.fillStyle='#3f9626';ctx.fillRect(s.x,s.y+8,s.w,3); } });
+  hazards.forEach(hz=>{ ctx.fillStyle='#b33'; for(let i=0;i<hz.w;i+=10){ ctx.beginPath();
+    ctx.moveTo(hz.x+i,hz.y+hz.h);ctx.lineTo(hz.x+i+5,hz.y);ctx.lineTo(hz.x+i+10,hz.y+hz.h);ctx.closePath();ctx.fill(); } });
+  boulders.forEach(b=>{ ctx.fillStyle='#6b6b6b';ctx.strokeStyle='#3a3a3a';ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(b.x+17,b.y+17,17,0,7);ctx.fill();ctx.stroke(); });
+  drawFlag(flag.x,flag.y);
+  ents.forEach(e=>drawHero(e));
+  for(const fx of boostFx){ fx.t+=0.06; const a=1-fx.t; if(a<=0)continue;
+    ctx.globalAlpha=a;ctx.fillStyle='#ffd23f';
+    for(let k=0;k<6;k++){ const ang=-Math.PI/2+(k-2.5)*0.34,d=fx.t*60;
+      ctx.beginPath();ctx.arc(fx.x+Math.cos(ang)*d,fx.y+Math.sin(ang)*d,4*a+1,0,7);ctx.fill(); } ctx.globalAlpha=1; }
+  boostFx=boostFx.filter(f=>f.t<1);
+  if(L.gimmick==='flood'){ ctx.fillStyle='rgba(40,120,220,0.55)';ctx.fillRect(0,waterY,levelW,levelH+200);
+    ctx.fillStyle='rgba(120,180,255,0.5)'; for(let x=0;x<levelW;x+=40){ const wob=Math.sin((Date.now()/300)+(x/60))*4; ctx.fillRect(x,waterY-4+wob,40,6); } }
+  ctx.restore();
+  if(L.gimmick==='dark') drawDarkness(camY);
+}
+function drawClouds(){ ctx.save(); bgClouds.forEach(c=>{ const x=((c.x-camX*c.s)%(W+300)+(W+300))%(W+300)-150;
+  ctx.fillStyle='rgba(255,255,255,0.85)'; blob(x,c.y,34);blob(x+30,c.y+6,26);blob(x-26,c.y+8,22); }); ctx.restore(); }
+function blob(x,y,r){ ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill(); }
+function roundRect(x,y,w,h,r,fill,stroke){ ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill();} if(stroke){ctx.lineWidth=3;ctx.strokeStyle=stroke;ctx.stroke();} }
+function drawFlag(x,y){ ctx.fillStyle='#3a2a18';ctx.fillRect(x-3,y-TILE*1.6,6,TILE*1.6);
+  ctx.fillStyle='#ffd23f';const f=Math.sin(Date.now()/200)*3;
+  ctx.beginPath();ctx.moveTo(x+3,y-TILE*1.6);ctx.lineTo(x+34+f,y-TILE*1.35);ctx.lineTo(x+3,y-TILE*1.1);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#c8612f';ctx.fillRect(x+15,y-TILE*1.5,4,16);ctx.fillRect(x+11,y-TILE*1.46,12,4); }
+function drawHero(e){
+  const x=e.x,y=e.y,w=e.w,h=e.h; e.face_t+=0.1;
+  const bob=e.onGround?Math.sin(e.face_t)*1.2:0;
+  const isMe=(e.id===myId);
+  if(isMe){ ctx.save();ctx.globalAlpha=0.5+0.3*Math.sin(Date.now()/200);ctx.strokeStyle=e.color;ctx.lineWidth=4;
+    ctx.beginPath();ctx.arc(x+w/2,y+h*0.34,w*0.62,0,7);ctx.stroke();ctx.restore(); }
+  ctx.fillStyle=e.color; roundRect(x+3,y+h*0.42,w-6,h*0.5,7,e.color,'#00000044');
+  ctx.fillStyle='#2b2b3a';ctx.fillRect(x+5,y+h-8,7,8);ctx.fillRect(x+w-12,y+h-8,7,8);
+  ctx.fillStyle=e.color;ctx.fillRect(x-2,y+h*0.48,7,12);ctx.fillRect(x+w-5,y+h*0.48,7,12);
+  const hr=w*0.5,hx=x+w/2,hy=y+h*0.30+bob;
+  if(e.faceImg && e.faceImg.complete && e.faceImg.naturalWidth){
+    ctx.save();ctx.beginPath();ctx.arc(hx,hy,hr,0,7);ctx.closePath();ctx.clip();
+    ctx.drawImage(e.faceImg,hx-hr,hy-hr,hr*2,hr*2);ctx.restore();
+    ctx.lineWidth=3;ctx.strokeStyle='#23203a';ctx.beginPath();ctx.arc(hx,hy,hr,0,7);ctx.stroke();
+  } else { ctx.fillStyle='#ffe0bd';ctx.beginPath();ctx.arc(hx,hy,hr,0,7);ctx.fill();
+    ctx.lineWidth=3;ctx.strokeStyle='#23203a';ctx.stroke();
+    ctx.fillStyle=e.color;ctx.font='bold '+hr+'px Bungee, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(e.initial,hx,hy+2); }
+  ctx.fillStyle='#23203a';ctx.font='bold 11px Fredoka';ctx.textAlign='center';
+  const nm=e.name,tw=ctx.measureText(nm).width+10;
+  ctx.globalAlpha=0.8;ctx.fillRect(hx-tw/2,y-16,tw,14);ctx.globalAlpha=1;
+  ctx.fillStyle='#fff';ctx.fillText(nm,hx,y-9); if(e.done)ctx.fillText('✓',hx+tw/2+6,y-9);
+  ctx.textAlign='left';ctx.textBaseline='alphabetic';
+}
+function drawDarkness(camY){
+  const a=ents; if(!a.length)return;
+  let cx=0,cy=0;a.forEach(e=>{cx+=e.x+e.w/2;cy+=e.y+e.h/2;});cx/=a.length;cy/=a.length;
+  let sp=0;a.forEach(e=>sp+=Math.hypot((e.x+e.w/2)-cx,(e.y+e.h/2)-cy));sp/=a.length;
+  const close=Math.max(0,1-sp/260), radius=90+close*160, sx=cx-camX, sy=cy-camY;
+  ctx.fillStyle='rgba(5,4,15,0.96)';ctx.fillRect(0,0,W,H);
+  ctx.globalCompositeOperation='destination-out';
+  const g=ctx.createRadialGradient(sx,sy,0,sx,sy,radius);
+  g.addColorStop(0,'rgba(0,0,0,1)');g.addColorStop(0.7,'rgba(0,0,0,1)');g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(sx,sy,radius,0,7);ctx.fill();
+  ctx.globalCompositeOperation='source-over';
+  if(close<0.4){ ctx.fillStyle='#fff';ctx.font='bold 14px Fredoka';ctx.textAlign='center';
+    ctx.fillText('Stay close together! 🤝',W/2,90);ctx.textAlign='left'; }
+}
+
+/* ===================== MAIN LOOP ===================== */
+let last=performance.now(), inputAcc=0;
+function loop(now){
+  const dt=Math.min(now-last,40); last=now;
+  if(isHost){ hostUpdate(dt); hostMaybeSnapshot(dt); }
+  else {
+    joinerApply();
+    // joiner sends its input up ~30/sec
+    inputAcc+=dt; if(inputAcc>=33){ inputAcc=0;
+      socket.emit('input',{ move:{left:myInput.left,right:myInput.right,jump:myInput.jump}, boost:boostQueued });
+      boostQueued=false; }
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ===================== AUTO-JOIN VIA QR (?room=CODE) ===================== */
+(function(){ const p=new URLSearchParams(location.search); const r=p.get('room');
+  if(r){ document.getElementById('joinCode').value=r.toUpperCase(); flowMode='join'; pendingJoinCode=r.toUpperCase();
+    buildColorRow(); document.getElementById('charTitle').textContent='Make Your Character';
+    document.getElementById('charGo').textContent='Join Room ▶'; show('charScreen'); }
+})();
+buildColorRow();
+</script>
+</body>
+</html>

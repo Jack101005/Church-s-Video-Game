@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Together We Rise — A Co-op Bible Adventure</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
+
+  :root{
+    --sky-top:#5ec8f0;
+    --sky-bot:#bdeeff;
+    --ground:#7a4a23;
+    --grass:#5bbf3a;
+    --grass-dark:#3f9626;
+    --brick:#c8612f;
+    --ink:#23203a;
+    --gold:#ffd23f;
+    --p1:#ff5a5a; --p2:#4d8cff; --p3:#46c66b; --p4:#ffd23f; --p5:#b266ff;
+    --panel:#fff7e8;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0d1b2a;
+    font-family:'Fredoka',sans-serif; touch-action:none; user-select:none; -webkit-user-select:none;}
+  #app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  canvas{display:block;background:linear-gradient(180deg,var(--sky-top),var(--sky-bot));
+    image-rendering:pixelated; width:100%;height:100%;}
+
+  /* ---------- shared screen overlays ---------- */
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:18px;z-index:10;}
+  .screen.show{display:flex;}
+  .titlewrap{background:linear-gradient(180deg,#fff,#ffe9c2);border:6px solid var(--ink);
+    border-radius:22px;padding:26px 30px;box-shadow:0 10px 0 rgba(0,0,0,.35);max-width:560px;width:100%;}
+  h1{font-family:'Bungee',cursive;color:var(--brick);margin:0 0 4px;font-size:clamp(28px,7vw,52px);
+    text-shadow:3px 3px 0 var(--ink),-1px -1px 0 #fff;line-height:1;}
+  .sub{font-weight:700;color:var(--ink);font-size:clamp(13px,3.4vw,18px);margin:0 0 16px;opacity:.85;}
+  .verse{font-style:italic;color:#5a4a2a;font-size:13px;margin:10px 0 18px;}
+  button.big{font-family:'Bungee',cursive;font-size:clamp(16px,4.5vw,24px);color:#fff;
+    background:var(--p3);border:4px solid var(--ink);border-radius:16px;padding:14px 26px;cursor:pointer;
+    box-shadow:0 6px 0 #2c6e1a;transition:transform .06s, box-shadow .06s;}
+  button.big:active{transform:translateY(4px);box-shadow:0 2px 0 #2c6e1a;}
+  button.alt{background:var(--p2);box-shadow:0 6px 0 #2659b3;}
+  button.alt:active{box-shadow:0 2px 0 #2659b3;}
+  button.gold{background:var(--gold);color:var(--ink);box-shadow:0 6px 0 #c9a200;}
+  button.gold:active{box-shadow:0 2px 0 #c9a200;}
+
+  /* ---------- character creation ---------- */
+  #setup .titlewrap{max-width:680px;}
+  .slots{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:8px 0 16px;}
+  .slot{width:104px;background:var(--panel);border:4px solid var(--ink);border-radius:16px;
+    padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;}
+  .face{width:74px;height:74px;border-radius:50%;border:4px solid var(--ink);overflow:hidden;
+    background:#dfe7ef;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;}
+  .face img,.face canvas{width:100%;height:100%;object-fit:cover;}
+  .face .ph{font-family:'Bungee';font-size:30px;}
+  .face .cam{position:absolute;bottom:-2px;right:-2px;background:var(--ink);color:#fff;border-radius:50%;
+    width:24px;height:24px;font-size:13px;display:flex;align-items:center;justify-content:center;}
+  .nm{width:100%;border:3px solid var(--ink);border-radius:9px;text-align:center;font-family:'Fredoka';
+    font-weight:700;font-size:13px;padding:5px 3px;}
+  .pcol{width:54px;height:10px;border-radius:6px;border:2px solid var(--ink);}
+  .slot .rm{font-size:11px;color:#c0392b;font-weight:700;cursor:pointer;text-decoration:underline;}
+  .addbtn{width:104px;min-height:150px;border:4px dashed var(--ink);border-radius:16px;background:#fff7e8aa;
+    font-family:'Bungee';font-size:34px;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .hint{font-size:12px;color:#6a5a3a;margin:2px 0 14px;}
+
+  /* camera modal */
+  #cam{position:absolute;inset:0;background:rgba(10,12,24,.92);z-index:30;display:none;
+    flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:18px;}
+  #cam.show{display:flex;}
+  #cam video,#cam .shot{width:min(78vw,320px);height:min(78vw,320px);object-fit:cover;border-radius:50%;
+    border:6px solid #fff;background:#000;transform:scaleX(-1);}
+  #cam .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+  #cam p{color:#fff;font-weight:600;max-width:320px;font-size:13px;}
+
+  /* ---------- HUD ---------- */
+  #hud{position:absolute;top:0;left:0;right:0;display:none;justify-content:space-between;
+    align-items:flex-start;padding:8px 10px;z-index:8;pointer-events:none;}
+  #hud.show{display:flex;}
+  .roster{display:flex;gap:6px;flex-wrap:wrap;}
+  .chip{display:flex;align-items:center;gap:5px;background:#fff7e8dd;border:3px solid var(--ink);
+    border-radius:20px;padding:2px 9px 2px 2px;font-weight:700;font-size:12px;}
+  .chip img,.chip canvas{width:24px;height:24px;border-radius:50%;border:2px solid var(--ink);object-fit:cover;}
+  .chip.done{background:var(--gold);}
+  .lvlbadge{background:var(--ink);color:#fff;border-radius:14px;padding:6px 12px;font-family:'Bungee';
+    font-size:13px;text-align:center;}
+  .lvlbadge small{display:block;font-family:'Fredoka';font-weight:600;font-size:10px;opacity:.8;}
+
+  /* ---------- touch controls ---------- */
+  #pads{position:absolute;left:0;right:0;bottom:0;display:none;justify-content:space-between;
+    align-items:flex-end;padding:14px 18px 18px;z-index:9;pointer-events:none;}
+  #pads.show{display:flex;}
+  .pad{pointer-events:auto;}
+  .dpad{display:flex;gap:14px;}
+  .ctl{width:74px;height:74px;border-radius:50%;border:4px solid var(--ink);background:#fff7e8ee;
+    font-family:'Bungee';font-size:26px;color:var(--ink);display:flex;align-items:center;justify-content:center;
+    box-shadow:0 5px 0 rgba(0,0,0,.3);cursor:pointer;}
+  .ctl:active,.ctl.on{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.3);background:var(--gold);}
+  .actcol{display:flex;flex-direction:column;gap:12px;align-items:center;}
+  .ctl.jump{background:var(--p3);color:#fff;width:84px;height:84px;}
+  .ctl.help{background:var(--p1);color:#fff;font-size:15px;font-family:'Fredoka';font-weight:700;}
+  .switch{pointer-events:auto;position:absolute;left:50%;transform:translateX(-50%);bottom:24px;
+    background:var(--ink);color:#fff;border:3px solid #fff;border-radius:16px;padding:9px 16px;font-weight:700;
+    font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer;}
+  .switch canvas,.switch img{width:26px;height:26px;border-radius:50%;border:2px solid #fff;}
+
+  /* banners */
+  #banner{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    z-index:12;background:rgba(20,16,40,.55);text-align:center;padding:20px;}
+  #banner.show{display:flex;}
+  .bcard{background:#fff;border:6px solid var(--ink);border-radius:22px;padding:24px 28px;max-width:520px;
+    box-shadow:0 12px 0 rgba(0,0,0,.4);}
+  .bcard h2{font-family:'Bungee';color:var(--brick);margin:0 0 6px;font-size:clamp(22px,6vw,40px);}
+  .bcard .ref{font-family:'Bungee';color:var(--p2);font-size:14px;margin-bottom:8px;}
+  .bcard .vtext{font-style:italic;color:#3a3450;font-size:clamp(14px,4vw,18px);line-height:1.4;margin-bottom:8px;}
+  .bcard .teach{color:#5a4a2a;font-size:13px;margin-bottom:16px;}
+  .toast{position:absolute;top:64px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+    padding:8px 16px;border-radius:20px;font-weight:700;font-size:13px;z-index:11;opacity:0;transition:opacity .3s;
+    pointer-events:none;border:2px solid #fff;}
+  .toast.show{opacity:1;}
+  .credit{position:absolute;bottom:4px;width:100%;text-align:center;color:#ffffff88;font-size:10px;z-index:7;pointer-events:none;}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv"></canvas>
+
+  <!-- TITLE -->
+  <div class="screen show" id="title">
+    <div class="titlewrap">
+      <h1>Together We Rise</h1>
+      <p class="sub">A co-op Bible adventure for your group 🎮✝️</p>
+      <p class="verse">"Two are better than one… if either of them falls down, one can help the other up." — Ecclesiastes 4:9-10</p>
+      <button class="big" onclick="goSetup()">Start Game</button>
+      <p class="hint" style="margin-top:14px">Best on one shared screen — pass the phone or project it 📱➡️📺</p>
+    </div>
+  </div>
+
+  <!-- SETUP -->
+  <div class="screen" id="setup">
+    <div class="titlewrap">
+      <h1 style="font-size:clamp(22px,6vw,38px)">Make Your Team</h1>
+      <p class="hint">Tap a face circle to take a selfie 🤳 Your real face goes on a little hero body. No camera? You'll get a colored buddy with your initial — works fine!</p>
+      <div class="slots" id="slots"></div>
+      <button class="big gold" onclick="startGame()">Let's Go! ▶</button>
+    </div>
+  </div>
+</div>
+
+<!-- CAMERA MODAL -->
+<div id="cam">
+  <p id="camMsg">Smile! Line up your face in the circle 😄</p>
+  <video id="video" autoplay playsinline></video>
+  <canvas class="shot" id="shot" style="display:none"></canvas>
+  <div class="row" id="camRow">
+    <button class="big" onclick="snap()">📸 Snap</button>
+    <button class="big alt" onclick="closeCam()">Cancel</button>
+  </div>
+  <div class="row" id="confirmRow" style="display:none">
+    <button class="big gold" onclick="useShot()">✓ Use it</button>
+    <button class="big alt" onclick="retake()">↺ Retake</button>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="roster" id="roster"></div>
+  <div class="lvlbadge" id="lvlbadge">LVL 1<small>—</small></div>
+</div>
+
+<!-- TOUCH PADS -->
+<div id="pads">
+  <div class="pad dpad">
+    <div class="ctl" id="btnL">◀</div>
+    <div class="ctl" id="btnR">▶</div>
+  </div>
+  <div class="pad actcol">
+    <div class="ctl help" id="btnHelp">CARRY</div>
+    <div class="ctl jump" id="btnJump">▲</div>
+  </div>
+  <div class="switch" id="switchBtn">
+    <span id="switchFace"></span>
+    <span>TAP TO SWITCH</span>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- BANNER -->
+<div id="banner">
+  <div class="bcard">
+    <div class="ref" id="bRef"></div>
+    <h2 id="bTitle"></h2>
+    <p class="vtext" id="bVerse"></p>
+    <p class="teach" id="bTeach"></p>
+    <button class="big" id="bBtn" onclick="bannerNext()">Continue ▶</button>
+  </div>
+</div>
+
+<div class="credit">Together We Rise · made for Thursday Bible sharing</div>
+
+<script>
+/* =========================================================================
+   TOGETHER WE RISE — co-op Bible platformer, single file, no server.
+   ========================================================================= */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = W*DPR; cv.height = H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------------- player data ---------------- */
+const COLORS = ['#ff5a5a','#4d8cff','#46c66b','#ffd23f','#b266ff'];
+const COLNAME = ['Red','Blue','Green','Gold','Violet'];
+let players = [];          // {name,color,faceCanvas|null,initial}
+const MAXP = 5;
+
+/* default 4 empty-ish slots */
+function defaultPlayers(){
+  players = [];
+  for(let i=0;i<4;i++) players.push(mkPlayer(i));
+}
+function mkPlayer(i){
+  return {name:'', color:COLORS[i%5], faceCanvas:null, initial:(i+1)+''};
+}
+
+/* ---------------- SETUP UI ---------------- */
+function renderSlots(){
+  const box = document.getElementById('slots'); box.innerHTML='';
+  players.forEach((p,i)=>{
+    const slot = document.createElement('div'); slot.className='slot';
+    const face = document.createElement('div'); face.className='face';
+    face.style.background = p.color+'55';
+    if(p.faceCanvas){ face.appendChild(cloneFace(p.faceCanvas)); }
+    else { const ph=document.createElement('div'); ph.className='ph'; ph.textContent = p.name? p.name[0].toUpperCase():(i+1); ph.style.color=p.color; face.appendChild(ph);}
+    const cam=document.createElement('div'); cam.className='cam'; cam.textContent='📷'; face.appendChild(cam);
+    face.onclick=()=>openCam(i);
+
+    const nm=document.createElement('input'); nm.className='nm'; nm.placeholder='Name';
+    nm.value=p.name; nm.maxLength=10;
+    nm.oninput=e=>{ p.name=e.target.value; p.initial=e.target.value?e.target.value[0].toUpperCase():(i+1)+''; if(!p.faceCanvas) renderInitialOnly(i); };
+    const col=document.createElement('div'); col.className='pcol'; col.style.background=p.color;
+
+    slot.appendChild(face); slot.appendChild(nm); slot.appendChild(col);
+    if(players.length>2){ const rm=document.createElement('div'); rm.className='rm'; rm.textContent='remove';
+      rm.onclick=()=>{ players.splice(i,1); fixColors(); renderSlots(); }; slot.appendChild(rm);}
+    box.appendChild(slot);
+  });
+  if(players.length<MAXP){
+    const add=document.createElement('div'); add.className='addbtn'; add.textContent='+';
+    add.onclick=()=>{ players.push(mkPlayer(players.length)); fixColors(); renderSlots(); };
+    box.appendChild(add);
+  }
+}
+function renderInitialOnly(i){ renderSlots(); }
+function fixColors(){ players.forEach((p,i)=>{ if(COLORS.includes(p.color)) p.color=COLORS[i%5]; }); }
+function cloneFace(src){ const c=document.createElement('canvas'); c.width=src.width;c.height=src.height;
+  c.getContext('2d').drawImage(src,0,0); return c; }
+
+function goSetup(){ defaultPlayers(); renderSlots();
+  document.getElementById('title').classList.remove('show');
+  document.getElementById('setup').classList.add('show'); }
+
+/* ---------------- CAMERA ---------------- */
+let stream=null, camIdx=-1, shotData=null;
+const video=document.getElementById('video');
+const shot=document.getElementById('shot');
+async function openCam(i){
+  camIdx=i;
+  document.getElementById('cam').classList.add('show');
+  video.style.display=''; shot.style.display='none';
+  document.getElementById('camRow').style.display='flex';
+  document.getElementById('confirmRow').style.display='none';
+  document.getElementById('camMsg').textContent='Smile! Line up your face in the circle 😄';
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:640}},audio:false});
+    video.srcObject=stream;
+  }catch(err){
+    document.getElementById('camMsg').textContent="Camera unavailable — no worries! You'll get a colored buddy with your initial. (Tip: the camera only works on a secure https page.)";
+    document.getElementById('camRow').innerHTML='<button class="big alt" onclick="closeCam()">OK</button>';
+  }
+}
+function snap(){
+  const s=Math.min(video.videoWidth,video.videoHeight);
+  shot.width=256; shot.height=256;
+  const sx=(video.videoWidth-s)/2, sy=(video.videoHeight-s)/2;
+  const sctx=shot.getContext('2d');
+  // mirror to match preview
+  sctx.save(); sctx.translate(256,0); sctx.scale(-1,1);
+  sctx.drawImage(video,sx,sy,s,s,0,0,256,256); sctx.restore();
+  shotData=shot;
+  video.style.display='none'; shot.style.display='';
+  document.getElementById('camRow').style.display='none';
+  document.getElementById('confirmRow').style.display='flex';
+}
+function retake(){ video.style.display=''; shot.style.display='none';
+  document.getElementById('camRow').style.display='flex';
+  document.getElementById('confirmRow').style.display='none'; }
+function useShot(){
+  // build a circular face canvas
+  const c=document.createElement('canvas'); c.width=128;c.height=128;
+  const cc=c.getContext('2d');
+  cc.save(); cc.beginPath(); cc.arc(64,64,64,0,Math.PI*2); cc.clip();
+  cc.drawImage(shot,0,0,128,128); cc.restore();
+  players[camIdx].faceCanvas=c;
+  closeCam(); renderSlots();
+}
+function closeCam(){
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  document.getElementById('cam').classList.remove('show');
+  document.getElementById('camRow').innerHTML='<button class="big" onclick="snap()">📸 Snap</button><button class="big alt" onclick="closeCam()">Cancel</button>';
+}
+
+/* ====================================================================
+   GAME
+   ==================================================================== */
+const TILE=48;
+let gameState='setup';   // setup | play | banner
+let activeIdx=0;         // which player the controls drive
+let level=0;
+let camX=0;
+
+const keys={left:false,right:false,jump:false,help:false};
+
+/* ---- level definitions ----
+   grid string rows; legend:
+   X solid ground/brick   = floating platform   ^ spikes/hazard
+   . empty   S spawn area  F flag/goal  W water(rising)  B boulder spawn
+   Each level has a verse + teach + a coop gimmick.
+*/
+const LEVELS = [
+ {
+  ref:'Galatians 6:2', title:'The Bridge of Burdens',
+  verse:'"Carry each other’s burdens, and in this way you will fulfill the law of Christ."',
+  teach:'Some gaps are too wide to cross alone. Stand on a teammate and tap CARRY to lift them across. Nobody finishes until EVERYONE reaches the flag.',
+  rows:[
+   "............................................",
+   "............................................",
+   "............................................",
+   ".....=........=.......=......................",
+   "............................................",
+   "..................................F.........",
+   "SSSS..XXXX.....XXX....XXXX....XXXXXXXXXXX....",
+   "XXXX..XXXX.....XXX....XXXX....XXXXXXXXXXX....",
+   "XXXX..XXXX.....XXX....XXXX....XXXXXXXXXXX....",
+  ],
+  gimmick:'carry'
+ },
+ {
+  ref:'Isaiah 43:2', title:'The Rising Flood',
+  verse:'"When you pass through the waters, I will be with you; they will not sweep over you."',
+  teach:'The water keeps rising! Climb the platforms together. Lift teammates who are stuck below — leave no one in the flood.',
+  rows:[
+   "............................................",
+   "..................................F.........",
+   "..............................XXXXXXXX......",
+   ".......................=....................",
+   "................=...........................",
+   ".........=..................................",
+   "....=.......................................",
+   "SSSS........................................",
+   "XXXX........................................",
+  ],
+  gimmick:'flood'
+ },
+ {
+  ref:'Matthew 17:20', title:'The Mountain of Doubt',
+  verse:'"If you have faith as small as a mustard seed, you can say to this mountain, Move, and it will move."',
+  teach:'Boulders of doubt roll down the slope. Time your climb, help each other up the ledges, and reach the peak together.',
+  rows:[
+   ".........................................F..",
+   ".....................................XXXXX..",
+   "................................=...........",
+   "..........................=.................",
+   "....................=.......................",
+   "..............=.............................",
+   "........=...................................",
+   "SSSS........................................",
+   "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  ],
+  gimmick:'boulders'
+ },
+ {
+  ref:'Psalm 23:4', title:'The Valley of Shadow',
+  verse:'"Even though I walk through the valley of the shadow of death, I will fear no evil, for You are with me."',
+  teach:'It is dark here. Your light grows when you stay CLOSE together. Drift apart and the darkness closes in. Move as one to the light.',
+  rows:[
+   "............................................",
+   "............................................",
+   "..................................F.........",
+   "............................................",
+   "............................................",
+   "............................................",
+   "SSSS.......XXXX.....XXXX.....XXXXXXXXXX......",
+   "XXXX.......XXXX.....XXXX.....XXXXXXXXXX......",
+   "XXXXXXX....XXXX.....XXXX.....XXXXXXXXXX......",
+  ],
+  gimmick:'dark'
+ },
+ {
+  ref:'Ecclesiastes 4:9-12', title:'The Final Climb',
+  verse:'"Though one may be overpowered, two can defend themselves. A cord of three strands is not quickly broken."',
+  teach:'Everything you learned, together now: carry, climb, and stay close. Get the WHOLE team to the top. A cord of many strands is not broken!',
+  rows:[
+   "...............................F............",
+   "...........................XXXXXX...........",
+   ".......................=....................",
+   "..............=.............................",
+   "........^.........=.........................",
+   "....=.......^...............................",
+   "SSSS....XXX.....XXX....XX....................",
+   "XXXX....XXX.....XXX....XX....................",
+   "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  ],
+  gimmick:'mixed'
+ },
+];
+
+/* parsed world */
+let solids=[], hazards=[], spawn={x:0,y:0}, flag={x:0,y:0}, levelW=0, levelH=0;
+let waterY=0, boulders=[], lastBoulder=0;
+
+function parseLevel(L){
+  solids=[];hazards=[];boulders=[];
+  const rows=L.rows; levelH=rows.length*TILE; levelW=rows[0].length*TILE;
+  let sx=null;
+  for(let r=0;r<rows.length;r++){
+    for(let c=0;c<rows[r].length;c++){
+      const ch=rows[r][c]; const x=c*TILE,y=r*TILE;
+      if(ch==='X'||ch==='='){ solids.push({x,y,w:TILE,h:TILE,plat:ch==='='}); }
+      else if(ch==='^'){ hazards.push({x:x+6,y:y+TILE-16,w:TILE-12,h:16}); }
+      else if(ch==='S'){ if(sx===null){sx=x; spawn={x:x,y:y};} }
+      else if(ch==='F'){ flag={x:x+TILE/2,y:y}; }
+    }
+  }
+  waterY = levelH + TILE;          // starts below
+  if(L.gimmick==='flood') waterY = levelH - TILE*0.5;
+  lastBoulder=0;
+}
+
+/* entities */
+let ents=[];
+function spawnEntities(){
+  ents=[];
+  players.forEach((p,i)=>{
+    ents.push({
+      i, name:p.name||COLNAME[i], color:p.color, face:p.faceCanvas, initial:p.initial,
+      x:spawn.x + (i*10), y:spawn.y - 4, w:30,h:40, vx:0,vy:0,
+      onGround:false, carrying:null, carriedBy:null, done:false, alive:true, face_t:0
+    });
+  });
+  activeIdx=0;
+}
+
+/* ---- physics constants ---- */
+const GRAV=0.9, MOVE=4.2, JUMP=-15.5, FRICTION=0.78, MAXFALL=18;
+
+function aabb(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
+
+function update(dt){
+  if(gameState!=='play') return;
+  const L=LEVELS[level];
+
+  // flood rising
+  if(L.gimmick==='flood'){ waterY -= 0.25; }
+
+  // boulders
+  if(L.gimmick==='boulders'||L.gimmick==='mixed'){
+    lastBoulder+=dt;
+    if(lastBoulder>1500){ lastBoulder=0;
+      boulders.push({x:levelW-TILE, y:0, w:34,h:34, vx:-3.4, vy:0});
+    }
+  }
+  boulders.forEach(b=>{ b.vy=Math.min(b.vy+GRAV,MAXFALL); b.x+=b.vx; b.y+=b.vy;
+    // land on solids
+    solids.forEach(s=>{ if(!s.plat && aabb(b,s) && b.vy>0){ b.y=s.y-b.h; b.vy=0; } });
+  });
+  boulders = boulders.filter(b=>b.x>-60 && b.y<levelH+80);
+
+  // control active player
+  const A=ents[activeIdx];
+  if(A && A.alive && !A.carriedBy){
+    if(keys.left){ A.vx=-MOVE; A.dir=-1; }
+    else if(keys.right){ A.vx=MOVE; A.dir=1; }
+    else A.vx*=FRICTION;
+    if(keys.jump && A.onGround){ A.vy=JUMP; A.onGround=false; }
+  }
+
+  // per-entity physics
+  ents.forEach(e=>{
+    if(!e.alive) return;
+    if(e.carriedBy){  // sit on carrier's head
+      const c=e.carriedBy;
+      e.x=c.x + (c.w-e.w)/2; e.y=c.y - e.h + 4; e.vx=0; e.vy=0; e.onGround=true;
+      return;
+    }
+    e.vy=Math.min(e.vy+GRAV,MAXFALL);
+    // horizontal
+    e.x+=e.vx;
+    solids.forEach(s=>{ if(s.plat) return; if(aabb(e,s)){
+      if(e.vx>0) e.x=s.x-e.w; else if(e.vx<0) e.x=s.x+s.w; e.vx=0; }});
+    // vertical
+    e.y+=e.vy; e.onGround=false;
+    solids.forEach(s=>{
+      if(aabb(e,s)){
+        if(e.vy>0 && (e.y+e.h - e.vy) <= s.y+6){ // landing (one-way for plat)
+          e.y=s.y-e.h; e.vy=0; e.onGround=true;
+        } else if(!s.plat && e.vy<0){ e.y=s.y+s.h; e.vy=0; }
+      }
+    });
+    // bounds
+    if(e.x<0)e.x=0; if(e.x+e.w>levelW)e.x=levelW-e.w;
+
+    // hazards
+    hazards.forEach(hz=>{ if(aabb(e,hz)) respawn(e); });
+    boulders.forEach(b=>{ if(aabb(e,b)) respawn(e); });
+
+    // water
+    if(L.gimmick==='flood' && e.y+e.h > waterY) respawn(e);
+    // fell off world
+    if(e.y>levelH+120) respawn(e);
+
+    // reached flag?
+    if(!e.done && Math.abs((e.x+e.w/2)-flag.x)<TILE*0.6 && e.y < flag.y+TILE*2){
+      e.done=true; toast((e.name)+' reached the flag! 🚩');
+    }
+  });
+
+  // carry mechanic: active player picks up a teammate standing right on their head,
+  // OR is lifted. Here CARRY = the active player lifts whoever is directly above/touching.
+  if(keys.help){ tryCarry(A); }
+  else if(A && A.carrying){ /* keep carrying while held */ }
+
+  // win check
+  if(ents.filter(e=>e.alive).every(e=>e.done) && ents.length>0){
+    levelComplete();
+  }
+
+  // camera follow active player (horizontal scroll)
+  const target = A ? A.x - W/2 + 100 : 0;
+  camX += (target-camX)*0.1;
+  camX = Math.max(0, Math.min(camX, Math.max(0,levelW-W)));
+}
+
+function tryCarry(A){
+  if(!A) return;
+  if(A.carrying){ return; }
+  // find a teammate whose feet are near A's head and roughly aligned
+  for(const e of ents){
+    if(e===A||!e.alive||e.carriedBy) continue;
+    const headY=A.y; const ex=e.x+e.w/2, ax=A.x+A.w/2;
+    if(Math.abs(ex-ax)<TILE*0.8 && Math.abs((e.y+e.h)-headY)<28){
+      A.carrying=e; e.carriedBy=A; toast(A.name+' is carrying '+e.name+'! 🤝'); return;
+    }
+  }
+}
+function dropCarry(){
+  ents.forEach(e=>{ if(e.carrying){ e.carrying.carriedBy=null; e.carrying.vy=-4; e.carrying=null; } });
+}
+
+function respawn(e){
+  // gentle respawn near spawn; if carrying someone, drop them
+  if(e.carrying){ e.carrying.carriedBy=null; e.carrying=null; }
+  if(e.carriedBy){ e.carriedBy.carrying=null; e.carriedBy=null; }
+  e.x=spawn.x + e.i*10; e.y=spawn.y-4; e.vx=0; e.vy=0; e.done=false;
+  toast(e.name+' slipped — back to start!');
+}
+
+/* ---------------- render ---------------- */
+let bgClouds=[]; for(let i=0;i<8;i++) bgClouds.push({x:Math.random()*2000,y:40+Math.random()*200,s:0.3+Math.random()*0.5});
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const L=LEVELS[level];
+  // sky gradient is on canvas bg via CSS; draw atmosphere
+  drawClouds();
+
+  ctx.save();
+  // vertical offset so level bottom sits near screen bottom
+  const camY = Math.max(0, levelH - H);
+  ctx.translate(-camX, -camY);
+
+  // ground/solids
+  solids.forEach(s=>{
+    if(s.plat){ // floating platform
+      roundRect(s.x,s.y,s.w,s.h-18,8, '#caa15a','#7a5a22'); 
+    } else {
+      // brick/ground block
+      ctx.fillStyle='#7a4a23'; ctx.fillRect(s.x,s.y,s.w,s.h);
+      ctx.fillStyle='#8b5a2b'; ctx.fillRect(s.x+3,s.y+3,s.w-6,s.h-6);
+      // grass cap if top
+      ctx.fillStyle='#5bbf3a'; ctx.fillRect(s.x,s.y,s.w,8);
+      ctx.fillStyle='#3f9626'; ctx.fillRect(s.x,s.y+8,s.w,3);
+    }
+  });
+
+  // hazards (spikes)
+  hazards.forEach(hz=>{ ctx.fillStyle='#b33'; for(let i=0;i<hz.w;i+=10){
+    ctx.beginPath(); ctx.moveTo(hz.x+i,hz.y+hz.h); ctx.lineTo(hz.x+i+5,hz.y); ctx.lineTo(hz.x+i+10,hz.y+hz.h); ctx.closePath(); ctx.fill(); } });
+
+  // boulders
+  boulders.forEach(b=>{ ctx.fillStyle='#6b6b6b'; ctx.strokeStyle='#3a3a3a'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(b.x+b.w/2,b.y+b.h/2,b.w/2,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#555'; ctx.beginPath(); ctx.arc(b.x+b.w*0.35,b.y+b.h*0.4,3,0,7); ctx.fill(); });
+
+  // flag
+  drawFlag(flag.x,flag.y);
+
+  // entities (draw carried last so they're on top)
+  const order=[...ents].sort((a,b)=> (a.carriedBy?1:0)-(b.carriedBy?1:0));
+  order.forEach(e=>drawHero(e, e===ents[activeIdx]));
+
+  // water
+  if(L.gimmick==='flood'){
+    ctx.fillStyle='rgba(40,120,220,0.55)';
+    ctx.fillRect(0,waterY,levelW,levelH+200);
+    ctx.fillStyle='rgba(120,180,255,0.5)';
+    for(let x=0;x<levelW;x+=40){ const wob=Math.sin((Date.now()/300)+(x/60))*4;
+      ctx.fillRect(x,waterY-4+wob,40,6); }
+  }
+
+  ctx.restore();
+
+  // darkness overlay (Valley)
+  if(L.gimmick==='dark'){ drawDarkness(camY); }
+}
+
+function drawClouds(){
+  ctx.save();
+  bgClouds.forEach(c=>{ const x=((c.x - camX*c.s) % (W+300)+ (W+300))%(W+300) -150;
+    ctx.fillStyle='rgba(255,255,255,0.85)';
+    blob(x,c.y,34); blob(x+30,c.y+6,26); blob(x-26,c.y+8,22); });
+  ctx.restore();
+}
+function blob(x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); }
+
+function roundRect(x,y,w,h,r,fill,stroke){
+  ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill();} if(stroke){ctx.lineWidth=3;ctx.strokeStyle=stroke;ctx.stroke();}
+}
+
+function drawFlag(x,y){
+  ctx.fillStyle='#3a2a18'; ctx.fillRect(x-3,y-TILE*1.6,6,TILE*1.6);
+  ctx.fillStyle='#ffd23f';
+  const f=Math.sin(Date.now()/200)*3;
+  ctx.beginPath(); ctx.moveTo(x+3,y-TILE*1.6);
+  ctx.lineTo(x+34+f,y-TILE*1.35); ctx.lineTo(x+3,y-TILE*1.1); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#c8612f'; ctx.font='bold 16px Fredoka';
+  // little cross on the flag
+  ctx.fillRect(x+15,y-TILE*1.5,4,16); ctx.fillRect(x+11,y-TILE*1.46,12,4);
+}
+
+function drawHero(e, isActive){
+  if(!e.alive) return;
+  const x=e.x, y=e.y, w=e.w, h=e.h;
+  e.face_t+=0.1;
+  const bob = e.onGround? Math.sin(e.face_t)*1.2 : 0;
+
+  // active glow ring
+  if(isActive){ ctx.save(); ctx.globalAlpha=0.5+0.3*Math.sin(Date.now()/200);
+    ctx.strokeStyle=e.color; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.arc(x+w/2,y+h*0.34,w*0.62,0,7); ctx.stroke(); ctx.restore(); }
+
+  // body (chunky overall)
+  ctx.fillStyle=e.color;
+  roundRect(x+3,y+h*0.42,w-6,h*0.5,7,e.color,'#00000044');
+  // legs
+  ctx.fillStyle='#2b2b3a'; ctx.fillRect(x+5,y+h-8,7,8); ctx.fillRect(x+w-12,y+h-8,7,8);
+  // arms (raise when carrying)
+  ctx.fillStyle=e.color;
+  if(e.carrying){ ctx.fillRect(x-2,y+h*0.32,7,12); ctx.fillRect(x+w-5,y+h*0.32,7,12); }
+  else { ctx.fillRect(x-2,y+h*0.48,7,12); ctx.fillRect(x+w-5,y+h*0.48,7,12); }
+
+  // head/face circle
+  const hr=w*0.5;
+  const hx=x+w/2, hy=y+h*0.30+bob;
+  if(e.face){
+    ctx.save(); ctx.beginPath(); ctx.arc(hx,hy,hr,0,7); ctx.closePath(); ctx.clip();
+    ctx.drawImage(e.face, hx-hr, hy-hr, hr*2, hr*2); ctx.restore();
+    ctx.lineWidth=3; ctx.strokeStyle='#23203a'; ctx.beginPath(); ctx.arc(hx,hy,hr,0,7); ctx.stroke();
+  } else {
+    ctx.fillStyle='#ffe0bd'; ctx.beginPath(); ctx.arc(hx,hy,hr,0,7); ctx.fill();
+    ctx.lineWidth=3; ctx.strokeStyle='#23203a'; ctx.stroke();
+    ctx.fillStyle=e.color; ctx.font='bold '+(hr)+'px Bungee, sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(e.initial, hx, hy+2);
+  }
+  // name tag
+  ctx.fillStyle='#23203a'; ctx.font='bold 11px Fredoka'; ctx.textAlign='center';
+  const nm=e.name||COLNAME[e.i];
+  const tw=ctx.measureText(nm).width+10;
+  ctx.globalAlpha=0.8; ctx.fillRect(hx-tw/2,y-16,tw,14); ctx.globalAlpha=1;
+  ctx.fillStyle='#fff'; ctx.fillText(nm, hx, y-9);
+  if(e.done){ ctx.fillText('✓', hx+tw/2+6, y-9); }
+  ctx.textAlign='left';
+}
+
+function drawDarkness(camY){
+  // build radial light around the *group centroid*, brighter when players are close
+  const alive=ents.filter(e=>e.alive);
+  if(!alive.length) return;
+  let cx=0,cy=0; alive.forEach(e=>{cx+=e.x+e.w/2; cy+=e.y+e.h/2;}); cx/=alive.length; cy/=alive.length;
+  // spread = avg distance from centroid
+  let spread=0; alive.forEach(e=>{ spread+=Math.hypot((e.x+e.w/2)-cx,(e.y+e.h/2)-cy); }); spread/=alive.length;
+  const closeness = Math.max(0, 1 - spread/260);    // 1 = tight group
+  const radius = 90 + closeness*160;
+
+  const sx=cx-camX, sy=cy-camY;
+  const g=ctx.createRadialGradient(sx,sy,radius*0.3, sx,sy,radius);
+  g.addColorStop(0,'rgba(5,4,15,0)'); g.addColorStop(1,'rgba(5,4,15,0.96)');
+  ctx.fillStyle='rgba(5,4,15,0.96)'; ctx.fillRect(0,0,W,H);
+  ctx.globalCompositeOperation='destination-out';
+  const g2=ctx.createRadialGradient(sx,sy,0, sx,sy,radius);
+  g2.addColorStop(0,'rgba(0,0,0,1)'); g2.addColorStop(0.7,'rgba(0,0,0,1)'); g2.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g2; ctx.beginPath(); ctx.arc(sx,sy,radius,0,7); ctx.fill();
+  ctx.globalCompositeOperation='source-over';
+  if(closeness<0.4){ ctx.fillStyle='#fff'; ctx.font='bold 14px Fredoka'; ctx.textAlign='center';
+    ctx.fillText('Stay close together! 🤝', W/2, 90); ctx.textAlign='left'; }
+}
+
+/* ---------------- HUD & flow ---------------- */
+function startGame(){
+  // ensure names
+  players.forEach((p,i)=>{ if(!p.name) p.name=COLNAME[i]; });
+  document.getElementById('setup').classList.remove('show');
+  document.getElementById('hud').classList.add('show');
+  document.getElementById('pads').classList.add('show');
+  level=0; loadLevel();
+}
+function loadLevel(){
+  parseLevel(LEVELS[level]); spawnEntities(); camX=0;
+  buildRoster(); updateSwitchFace();
+  document.getElementById('lvlbadge').innerHTML='LVL '+(level+1)+'<small>'+LEVELS[level].title+'</small>';
+  showBanner('intro');
+}
+function buildRoster(){
+  const r=document.getElementById('roster'); r.innerHTML='';
+  ents.forEach((e,i)=>{ const c=document.createElement('div'); c.className='chip'; c.id='chip'+i;
+    c.style.borderColor=e.color;
+    if(e.face) c.appendChild(cloneFace(e.face));
+    else { const d=document.createElement('div'); d.style.cssText='width:24px;height:24px;border-radius:50%;border:2px solid #23203a;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;background:'+e.color+';color:#fff'; d.textContent=e.initial; c.appendChild(d);}
+    const s=document.createElement('span'); s.textContent=e.name; c.appendChild(s);
+    r.appendChild(c); });
+}
+function refreshRoster(){ ents.forEach((e,i)=>{ const c=document.getElementById('chip'+i); if(c){ c.classList.toggle('done',e.done);} }); }
+
+function updateSwitchFace(){
+  const sf=document.getElementById('switchFace'); sf.innerHTML='';
+  const e=ents[activeIdx]; if(!e) return;
+  if(e.face) sf.appendChild(cloneFace(e.face));
+  else { const d=document.createElement('div'); d.style.cssText='width:26px;height:26px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;background:'+e.color+';color:#fff'; d.textContent=e.initial; sf.appendChild(d); }
+}
+function switchPlayer(){
+  if(!ents.length) return;
+  let n=0;
+  do{ activeIdx=(activeIdx+1)%ents.length; n++; } while(ents[activeIdx] && ents[activeIdx].done && n<=ents.length);
+  updateSwitchFace();
+  toast('Now controlling '+(ents[activeIdx].name)+' 🎮');
+}
+
+/* banners */
+let bannerMode='intro';
+function showBanner(mode){
+  bannerMode=mode; gameState='banner';
+  const L=LEVELS[level];
+  document.getElementById('bRef').textContent=L.ref;
+  if(mode==='intro'){
+    document.getElementById('bTitle').textContent=L.title;
+    document.getElementById('bVerse').textContent=L.verse;
+    document.getElementById('bTeach').textContent=L.teach;
+    document.getElementById('bBtn').textContent='Begin ▶';
+  } else if(mode==='complete'){
+    document.getElementById('bTitle').textContent='Level Complete! 🎉';
+    document.getElementById('bVerse').textContent=L.verse;
+    document.getElementById('bTeach').textContent='You made it together. '+(level<LEVELS.length-1?'On to the next challenge!':'');
+    document.getElementById('bBtn').textContent = level<LEVELS.length-1 ? 'Next Level ▶' : 'See the Ending ▶';
+  } else if(mode==='win'){
+    document.getElementById('bRef').textContent='Ecclesiastes 4:12';
+    document.getElementById('bTitle').textContent='Together, You Rose! 👑';
+    document.getElementById('bVerse').textContent='"A cord of three strands is not quickly broken."';
+    document.getElementById('bTeach').textContent='Every level needed all of you. That is the body of Christ — many parts, one team. Well done! 🙌';
+    document.getElementById('bBtn').textContent='Play Again ↺';
+  }
+  document.getElementById('banner').classList.add('show');
+}
+function bannerNext(){
+  document.getElementById('banner').classList.remove('show');
+  if(bannerMode==='intro'){ gameState='play'; }
+  else if(bannerMode==='complete'){
+    if(level<LEVELS.length-1){ level++; loadLevel(); }
+    else { showBanner('win'); }
+  } else if(bannerMode==='win'){
+    // back to title
+    document.getElementById('hud').classList.remove('show');
+    document.getElementById('pads').classList.remove('show');
+    gameState='setup';
+    document.getElementById('title').classList.add('show');
+  }
+}
+function levelComplete(){ if(gameState==='play'){ showBanner('complete'); } }
+
+/* toast */
+let toastT=null;
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1600); refreshRoster(); }
+
+/* ---------------- input wiring ---------------- */
+function bindHold(id,on,off){
+  const el=document.getElementById(id);
+  const set=(v)=>{ on&&on(v); };
+  el.addEventListener('touchstart',e=>{e.preventDefault();el.classList.add('on');on&&on();},{passive:false});
+  el.addEventListener('touchend',e=>{e.preventDefault();el.classList.remove('on');off&&off();},{passive:false});
+  el.addEventListener('touchcancel',e=>{el.classList.remove('on');off&&off();});
+  el.addEventListener('mousedown',e=>{e.preventDefault();el.classList.add('on');on&&on();});
+  window.addEventListener('mouseup',()=>{el.classList.remove('on');off&&off();});
+}
+bindHold('btnL',()=>keys.left=true,()=>keys.left=false);
+bindHold('btnR',()=>keys.right=true,()=>keys.right=false);
+bindHold('btnJump',()=>keys.jump=true,()=>keys.jump=false);
+bindHold('btnHelp',()=>{keys.help=true;},()=>{keys.help=false;dropCarry();});
+document.getElementById('switchBtn').addEventListener('click',switchPlayer);
+document.getElementById('switchBtn').addEventListener('touchstart',e=>{e.preventDefault();switchPlayer();},{passive:false});
+
+/* keyboard too (handy for testing / projector + keyboard) */
+window.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft'||e.key==='a')keys.left=true;
+  if(e.key==='ArrowRight'||e.key==='d')keys.right=true;
+  if(e.key===' '||e.key==='ArrowUp'||e.key==='w'){keys.jump=true;e.preventDefault();}
+  if(e.key==='Shift'||e.key==='e')keys.help=true;
+  if(e.key==='Tab'){e.preventDefault();switchPlayer();}
+});
+window.addEventListener('keyup',e=>{
+  if(e.key==='ArrowLeft'||e.key==='a')keys.left=false;
+  if(e.key==='ArrowRight'||e.key==='d')keys.right=false;
+  if(e.key===' '||e.key==='ArrowUp'||e.key==='w')keys.jump=false;
+  if(e.key==='Shift'||e.key==='e'){keys.help=false;dropCarry();}
+});
+
+/* ---------------- main loop ---------------- */
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(now-last,40); last=now;
+  update(dt); draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

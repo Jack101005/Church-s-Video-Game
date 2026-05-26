@@ -129,17 +129,19 @@ io.on('connection', (socket) => {
      old hostId check would silently drop every event. So if this socket is in
      the room and claims host, we refresh hostId to match. */
   socket.on('hostEvent', (evt) => {
-    if (!joinedRoom) return;
+    if (!joinedRoom) { console.log('[hostEvent] dropped: no joinedRoom for', socket.id); return; }
     const room = rooms[joinedRoom];
-    if (!room) return;
-    // if the recorded host is gone but this socket is a member, adopt as host
+    if (!room) { console.log('[hostEvent] dropped: room', joinedRoom, 'gone'); return; }
     if (room.hostId !== socket.id) {
       const hostStillConnected = io.sockets.sockets.has(room.hostId);
       if (!hostStillConnected && room.players[socket.id]) {
         room.hostId = socket.id;
+        console.log('[hostEvent] adopted new host', socket.id, 'for room', joinedRoom);
       }
     }
-    if (room.hostId !== socket.id) return;
+    if (room.hostId !== socket.id) { console.log('[hostEvent] dropped: not host. sender', socket.id, 'host', room.hostId); return; }
+    const others = Object.keys(room.players).filter(id => id !== socket.id).length;
+    console.log('[hostEvent]', evt.t, 'room', joinedRoom, '-> broadcasting to', others, 'players');
     socket.to(joinedRoom).emit('hostEvent', evt);
   });
 

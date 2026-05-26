@@ -124,11 +124,22 @@ io.on('connection', (socket) => {
     socket.to(joinedRoom).volatile.emit('snapshot', snap);
   });
 
-  /* HOST can broadcast level/banner changes, etc. */
+  /* HOST can broadcast questions/reveals/etc to everyone else in the room.
+     Robustness: if the host briefly reconnected and got a new socket id, the
+     old hostId check would silently drop every event. So if this socket is in
+     the room and claims host, we refresh hostId to match. */
   socket.on('hostEvent', (evt) => {
     if (!joinedRoom) return;
     const room = rooms[joinedRoom];
-    if (!room || room.hostId !== socket.id) return;
+    if (!room) return;
+    // if the recorded host is gone but this socket is a member, adopt as host
+    if (room.hostId !== socket.id) {
+      const hostStillConnected = io.sockets.sockets.has(room.hostId);
+      if (!hostStillConnected && room.players[socket.id]) {
+        room.hostId = socket.id;
+      }
+    }
+    if (room.hostId !== socket.id) return;
     socket.to(joinedRoom).emit('hostEvent', evt);
   });
 

@@ -479,9 +479,16 @@ socket.on('playerJoined',({id,player})=>{ if(isHost && gameState==='play'){ lobb
 socket.on('playerLeft',({id})=>{ if(isHost){ ents=ents.filter(e=>e.id!==id); delete remoteInputs[id]; buildRoster(); } });
 
 /* JOINER receives snapshots and host events */
-let lastSnap=null, snapPrev=null, snapT=0;
-socket.on('snapshot',(snap)=>{ if(isHost) return; snapPrev=lastSnap; lastSnap=snap; snapT=0;
-  // ensure entities exist & faces loaded
+/* Joiner keeps the two most recent snapshots and the wall-clock time each
+   arrived, then renders a point slightly in the PAST, interpolating between
+   them. Rendering ~100ms behind real time means we almost always have a
+   "next" snapshot to glide toward, which removes the stutter. */
+let snapA=null, snapB=null;      // snapA = older, snapB = newer
+let snapAtA=0, snapAtB=0;        // arrival times (performance.now)
+const INTERP_DELAY=100;          // render 100ms in the past for smoothness
+socket.on('snapshot',(snap)=>{ if(isHost) return;
+  snapA=snapB; snapAtA=snapAtB;
+  snapB=snap;  snapAtB=performance.now();
   syncJoinerEnts(snap);
 });
 socket.on('hostEvent',(evt)=>{ if(isHost) return; handleHostEvent(evt); });
@@ -583,23 +590,40 @@ function hostLevelComplete(){ if(gameState==='play'){ gameState='banner'; showBa
 let snapAcc=0;
 function hostMaybeSnapshot(dt){
   if(!isHost||gameState==='lobby') return;
-  snapAcc+=dt; if(snapAcc<50) return; snapAcc=0;
+  snapAcc+=dt; if(snapAcc<30) return; snapAcc=0;   // ~33 snapshots/sec
   const snap={ lv:level, gs:gameState, w:Math.round(waterY),
     e:ents.map(e=>({id:e.id,n:e.name,c:e.color,x:Math.round(e.x),y:Math.round(e.y),d:e.done?1:0,g:e.onGround?1:0})),
     b:boulders.map(b=>({x:Math.round(b.x),y:Math.round(b.y)})) };
   socket.emit('snapshot',snap);
 }
 
-/* JOINER applies snapshot to its ents for drawing (with light interpolation) */
+/* JOINER renders a position INTERP_DELAY ms in the past, blending between the
+   two buffered snapshots. This is the standard fix for jerky networked motion:
+   instead of chasing the newest position, we smoothly play back slightly
+   delayed, so there is always a target to glide toward. */
 function joinerApply(){
-  if(isHost||!lastSnap) return;
+  if(isHost || !snapB) return;
+  const renderTime = performance.now() - INTERP_DELAY;
+  let t = 0;
+  if(snapA && snapAtB > snapAtA){
+    t = (renderTime - snapAtA) / (snapAtB - snapAtA);
+    t = Math.max(0, Math.min(1, t));   // clamp; if we're ahead, sit on newest
+  } else {
+    t = 1; // only one snapshot so far
+  }
+  const A = snapA || snapB, B = snapB;
+  const mapA={}; A.e.forEach(s=>mapA[s.id]=s);
   const map={}; ents.forEach(e=>map[e.id]=e);
-  lastSnap.e.forEach(s=>{ const e=map[s.id]; if(!e) return;
-    // simple smoothing toward latest snapshot position
-    e.x += ((s.x)-e.x)*0.4; e.y += ((s.y)-e.y)*0.4; e.done=!!s.d; e.onGround=!!s.g; });
-  // boulders
-  boulders = lastSnap.b.map(b=>({x:b.x,y:b.y,w:34,h:34}));
-  waterY = lastSnap.w;
+  B.e.forEach(sb=>{
+    const e=map[sb.id]; if(!e) return;
+    const sa=mapA[sb.id]||sb;
+    e.x = sa.x + (sb.x - sa.x) * t;
+    e.y = sa.y + (sb.y - sa.y) * t;
+    e.done=!!sb.d; e.onGround=!!sb.g;
+  });
+  // boulders + water from newest snapshot (fine without interpolation)
+  boulders = B.b.map(b=>({x:b.x,y:b.y,w:34,h:34}));
+  waterY = B.w;
   gameState='play';
 }
 

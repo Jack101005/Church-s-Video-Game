@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Finish the Verse — A Bible Party Game (v7)</title>
+<title>Finish the Verse — A Bible Party Game (v8)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
+  @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
   :root{
     --ink:#1d1b3a; --gold:#ffd23f; --brick:#c8612f; --panel:#fff7e8;
     --p1:#ff5a5a; --p2:#4d8cff; --p3:#46c66b; --purple:#8b5cf6;
@@ -189,8 +190,17 @@
         <div style="font-weight:600;font-size:clamp(13px,3.4vw,16px);line-height:1.5;color:var(--ink);" id="loveMsg"></div>
       </div>
       <button class="big alt" id="selfieBtn" style="display:none" onclick="openEndCam()">📸 Add your photo!</button>
+      <button class="big" id="closingBtn" style="display:none;background:#1d1b3a;box-shadow:0 6px 0 #000" onclick="hostClosing()">Show Closing Message 🌙</button>
       <button class="big gold" id="playAgainBtn" style="display:none" onclick="location.href=location.origin">Play Again ↺</button>
     </div>
+  </div>
+
+  <!-- BLACK TYPEWRITER CLOSING SCREEN -->
+  <div id="closingScreen" style="display:none;position:fixed;inset:0;background:#000;z-index:70;
+    align-items:center;justify-content:center;padding:32px;">
+    <div id="typed" style="color:#fff;font-family:'Fredoka',sans-serif;font-weight:600;
+      font-size:clamp(20px,5.5vw,32px);line-height:1.6;text-align:center;max-width:680px;
+      white-space:pre-wrap;"><span id="typedText"></span><span id="caret" style="display:inline-block;width:3px;height:1.1em;background:#fff;margin-left:2px;vertical-align:text-bottom;animation:blink 1s steps(1) infinite;"></span></div>
   </div>
 
   <!-- END-GAME CAMERA -->
@@ -213,14 +223,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script>
-/* =============================================================================
-   FINISH THE VERSE — submit-based Bible party game.
-   No real-time physics: each phone sends ONE answer per round, the host
-   collects them and broadcasts the reveal + scores. Lag-proof by design.
-   Roles: HOST drives rounds; JOINERS submit answers.
-   Reuses the same server relay: joiners use 'input' to send answers,
-   host uses 'hostEvent' to broadcast questions/reveals.
-   ============================================================================= */
+
 const socket = io({ transports:['websocket','polling'] });
 let myId=null, myRoom=null, isHost=false, myName='';
 let myPhotoSent=false;
@@ -495,9 +498,41 @@ function showFinal(sb, photos){
   // the love message (stable per session so it doesn't flicker on photo updates)
   if(!window._loveMsg) window._loveMsg = LOVE_MESSAGES[Math.floor(Math.random()*LOVE_MESSAGES.length)];
   document.getElementById('loveMsg').textContent = window._loveMsg;
-  // host gets play-again; joiners get the selfie button (once)
-  if(isHost){ document.getElementById('playAgainBtn').style.display='inline-block'; }
+  // host gets play-again + the closing message trigger; joiners get the selfie button (once)
+  if(isHost){ document.getElementById('playAgainBtn').style.display='inline-block';
+    document.getElementById('closingBtn').style.display='inline-block'; }
   else if(!myPhotoSent){ document.getElementById('selfieBtn').style.display='inline-block'; }
+}
+
+/* ---------------- CLOSING MESSAGE (black screen, typed out) ---------------- */
+const CLOSING_MESSAGE =
+  "Thank you for playing tonight.\n\n"+
+  "Whatever you scored, remember this:\n"+
+  "God loves you — completely, and without condition.\n\n"+
+  "You are seen. You are known. You belong.\n\n"+
+  "Go in peace. 🌙";
+
+function hostClosing(){
+  if(!isHost) return;
+  socket.emit('hostEvent',{ t:'closing', message: CLOSING_MESSAGE });
+  showClosing(CLOSING_MESSAGE);
+}
+
+let typeTimer=null;
+function showClosing(message){
+  // fade music down gently for the reflective moment
+  try{ if(typeof Tone!=='undefined' && Tone.Destination) Tone.Destination.volume.rampTo(-30, 2); }catch(e){}
+  const screen=document.getElementById('closingScreen');
+  screen.style.display='flex';
+  const out=document.getElementById('typedText');
+  out.textContent='';
+  let i=0;
+  clearInterval(typeTimer);
+  typeTimer=setInterval(()=>{                 // type one character at a time, left to right
+    if(i>=message.length){ clearInterval(typeTimer); return; }
+    out.textContent += message.charAt(i);
+    i++;
+  }, 55);   // ~55ms per character — lower = faster typing
 }
 
 /* ---------------- JOINER side ---------------- */
@@ -507,6 +542,7 @@ socket.on('hostEvent',(evt)=>{
   if(evt.t==='question'){ answered=false; showQuestionJoiner(evt); }
   else if(evt.t==='reveal'){ showRevealJoiner(evt); }
   else if(evt.t==='final'){ showFinal(evt.scores, evt.photos||{}); }
+  else if(evt.t==='closing'){ showClosing(evt.message); }
 });
 function showQuestionJoiner(p){ show('aScreen');
   const modeLabel={blank:'Finish the verse!',choice:'Tap the missing word',reference:'Which book is this from?',truefalse:'Is this verse correct?'}[p.mode];

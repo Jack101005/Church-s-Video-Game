@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Finish the Verse — A Bible Party Game (v5)</title>
+<title>Finish the Verse — A Bible Party Game (v6)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
   :root{
@@ -157,6 +157,7 @@
       <p class="sub" id="aPrompt">Finish the verse!</p>
       <div class="versebox" id="aVersebox" style="font-size:clamp(16px,4.5vw,22px)"></div>
       <input class="txt" id="answerInput" placeholder="Type the missing word(s)" maxlength="40">
+      <div id="answerOptions" style="display:none"></div>
       <button class="big gold" id="answerGo" onclick="submitAnswer()">Submit ▶</button>
       <div class="waiting" id="aWaiting" style="display:none">Answer locked in! ✓<br>Waiting for the round to end…</div>
     </div>
@@ -190,7 +191,14 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script>
-
+/* =============================================================================
+   FINISH THE VERSE — submit-based Bible party game.
+   No real-time physics: each phone sends ONE answer per round, the host
+   collects them and broadcasts the reveal + scores. Lag-proof by design.
+   Roles: HOST drives rounds; JOINERS submit answers.
+   Reuses the same server relay: joiners use 'input' to send answers,
+   host uses 'hostEvent' to broadcast questions/reveals.
+   ============================================================================= */
 const socket = io({ transports:['websocket','polling'] });
 let myId=null, myRoom=null, isHost=false, myName='';
 let players={};        // id -> {name}
@@ -203,7 +211,10 @@ socket.on('disconnect',()=>{ netT.textContent='reconnecting…'; netEl.classList
 function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));
   document.getElementById(id).classList.add('show'); }
 
-
+/* ---------------- STARTER VERSES (edit freely) ----------------
+   Each: text with ___ for the blank, the accepted answer(s), and reference.
+   'accept' lists acceptable answers (lowercased, punctuation ignored on compare).
+   Keep blanks to a few words so they're guessable. */
 const VERSES = [
   // ---- The love of God ----
   { before:"For God so loved the", blank:"world", after:", that he gave his only Son…",
@@ -240,6 +251,23 @@ const VERSES = [
 ];
 let roundOrder=[], roundIdx=0;
 const ROUND_SECONDS=20;
+
+/* ---- helpers for the different round styles ---- */
+// books used as decoys for "name the reference"
+const BOOKS = ["John","Psalm","Romans","Proverbs","Genesis","Matthew","Philippians",
+  "1 John","Ephesians","Colossians","Jeremiah","Lamentations","Isaiah","Luke","James"];
+// extra words used as decoys for multiple choice
+const DECOY_WORDS = ["world","love","light","heart","good","God","peace","grace","faith",
+  "hope","truth","life","works","glory","mercy","joy","spirit","word","name","way"];
+const bookOf = ref => ref.replace(/\s+\d+:\d+.*$/,'').trim();   // "1 John 4:19" -> "1 John"
+function shuffle(a){ return [...a].sort(()=>Math.random()-0.5); }
+function pickDecoys(correct, pool, n){
+  const opts=[correct];
+  for(const w of shuffle(pool)){ if(opts.length>=n+1) break;
+    if(w.toLowerCase()!==correct.toLowerCase() && !opts.some(o=>o.toLowerCase()===w.toLowerCase())) opts.push(w); }
+  return shuffle(opts);
+}
+const MODES = ['blank','choice','reference','truefalse'];
 
 /* ---------------- HOST: create / lobby ---------------- */
 function goHost(){ isHost=true; flow='host'; show('nameScreen'); }
@@ -300,13 +328,34 @@ function hostStartGame(){
 function startRound(){
   answersThisRound={};
   const v=VERSES[roundOrder[roundIdx]];
-  const payload={ t:'question', idx:roundIdx, total:roundOrder.length,
-    before:v.before, after:v.after, ref:v.ref, seconds:ROUND_SECONDS };
-  // host shows the question screen; broadcast to joiners to show answer screen
-  socket.emit('hostEvent', payload);
-  showQuestionHost(payload);
+  const mode = MODES[Math.floor(Math.random()*MODES.length)];
+  let q={ t:'question', idx:roundIdx, total:roundOrder.length, mode, ref:v.ref, seconds:ROUND_SECONDS };
+
+  if(mode==='blank'){
+    q.before=v.before; q.after=v.after;
+  } else if(mode==='choice'){
+    q.before=v.before; q.after=v.after;
+    q.options=pickDecoys(v.blank, DECOY_WORDS, 3);   // 4 options total
+    q.correct=v.blank;
+  } else if(mode==='reference'){
+    q.full = (v.before+' '+v.blank+' '+v.after).replace(/\s+/g,' ').trim();
+    q.options=pickDecoys(bookOf(v.ref), BOOKS, 3);
+    q.correct=bookOf(v.ref);
+  } else if(mode==='truefalse'){
+    // 50/50: show the real verse, or swap the blank word for a decoy
+    const real = Math.random()<0.5;
+    let shownWord=v.blank;
+    if(!real){ const d=pickDecoys(v.blank,DECOY_WORDS,1).find(w=>w.toLowerCase()!==v.blank.toLowerCase()); shownWord=d||v.blank; }
+    q.full = (v.before+' '+shownWord+' '+v.after).replace(/\s+/g,' ').trim();
+    q.options=['True','False'];
+    q.correct = real?'True':'False';
+  }
+  curQ=q;
+  socket.emit('hostEvent', q);
+  showQuestionHost(q);
   startTimer(ROUND_SECONDS);
 }
+let curQ=null;
 function startTimer(sec){
   timeLeft=sec; updateTimer();
   clearInterval(timerInt);
@@ -334,18 +383,33 @@ function renderSubmittedTags(){ const box=document.getElementById('submittedTags
 
 function hostEndRound(){
   const v=VERSES[roundOrder[roundIdx]];
-  // score: correct gets 1000 + small time bonus
+  const q=curQ;
   const results=[];
   Object.keys(players).forEach(id=>{
-    if(id===myId) return; // host plays as MC; not scored (keeps it simple)
+    if(id===myId) return; // host is MC, not scored
     const a=answersThisRound[id];
     let correct=false, gain=0;
-    if(a && isCorrect(a.answer, v)){ correct=true; gain=1000 + Math.round((a.timeLeft/ROUND_SECONDS)*200); }
+    if(a){
+      const ans=a.answer;
+      if(q.mode==='blank'){ correct=isCorrect(ans, v); }
+      else { // choice / reference / truefalse all compare against q.correct
+        correct = normalize(ans)===normalize(q.correct);
+      }
+      if(correct){
+        // base 1000 + a bigger speed bonus (up to +500) so being fast really matters
+        gain = 1000 + Math.round((a.timeLeft/ROUND_SECONDS)*500);
+      }
+    }
     scores[id]=(scores[id]||0)+gain;
     results.push({id, name:players[id].name, answer:a?a.answer:'(no answer)', correct, gain});
   });
-  results.sort((x,y)=>(y.correct-x.correct));
-  const reveal={ t:'reveal', answer:v.blank, ref:v.ref, results,
+  // show fastest correct first
+  results.sort((x,y)=>(y.correct-x.correct)||(y.gain-x.gain));
+  // the "answer" shown on reveal depends on mode
+  const shownAnswer = (q.mode==='blank'||q.mode==='choice') ? v.blank
+                    : (q.mode==='reference') ? bookOf(v.ref)
+                    : q.correct; // truefalse
+  const reveal={ t:'reveal', mode:q.mode, answer:shownAnswer, ref:v.ref, results,
     scores:scoreboard(), last:(roundIdx>=roundOrder.length-1) };
   socket.emit('hostEvent', reveal);
   showRevealHost(reveal);
@@ -360,9 +424,18 @@ function hostNext(){
 
 /* ---------------- HOST screen renders ---------------- */
 function showQuestionHost(p){ show('qScreen');
-  document.getElementById('qProgress').textContent='Round '+(p.idx+1)+' of '+p.total;
-  document.getElementById('versebox').innerHTML = esc(p.before)+' <span class="blank"></span> '+esc(p.after);
-  document.getElementById('qRef').textContent=p.ref;
+  const modeLabel={blank:'Fill the blank',choice:'Pick the word',reference:'Which book?',truefalse:'True or false?'}[p.mode];
+  document.getElementById('qProgress').textContent='Round '+(p.idx+1)+' of '+p.total+' · '+modeLabel;
+  const vb=document.getElementById('versebox');
+  if(p.mode==='blank'||p.mode==='choice'){
+    vb.innerHTML = esc(p.before)+' <span class="blank"></span> '+esc(p.after);
+  } else { // reference / truefalse show the full verse
+    vb.innerHTML = '“'+esc(p.full)+'”';
+  }
+  // show the options on the shared screen too (so the room can read along)
+  document.getElementById('qRef').textContent = (p.mode==='reference') ? 'Which book is this from?'
+    : (p.mode==='truefalse') ? 'Is this verse quoted correctly?'
+    : (p.mode==='choice') ? ('Options: '+p.options.join(' · ')) : p.ref;
   document.getElementById('submittedTags').innerHTML=''; }
 function showRevealHost(r){ show('revealScreen');
   document.getElementById('revealAns').textContent=r.answer;
@@ -390,20 +463,56 @@ socket.on('hostEvent',(evt)=>{
   else if(evt.t==='final'){ showFinal(evt.scores); }
 });
 function showQuestionJoiner(p){ show('aScreen');
+  const modeLabel={blank:'Finish the verse!',choice:'Tap the missing word',reference:'Which book is this from?',truefalse:'Is this verse correct?'}[p.mode];
   document.getElementById('aProgress').textContent='Round '+(p.idx+1)+' of '+p.total;
-  document.getElementById('aVersebox').innerHTML = esc(p.before)+' <span class="blank"></span> '+esc(p.after);
-  document.getElementById('answerInput').value='';
-  document.getElementById('answerInput').disabled=false;
-  document.getElementById('answerGo').style.display='inline-block';
-  document.getElementById('answerGo').disabled=false;
+  document.getElementById('aPrompt').textContent=modeLabel;
+  const vb=document.getElementById('aVersebox');
+  if(p.mode==='blank'||p.mode==='choice'){
+    vb.innerHTML = esc(p.before)+' <span class="blank"></span> '+esc(p.after);
+  } else {
+    vb.innerHTML = '“'+esc(p.full)+'”';
+  }
+  const input=document.getElementById('answerInput');
+  const optBox=document.getElementById('answerOptions');
+  const goBtn=document.getElementById('answerGo');
+  optBox.innerHTML='';
   document.getElementById('aWaiting').style.display='none';
-  setTimeout(()=>document.getElementById('answerInput').focus(),100); }
+
+  if(p.mode==='blank'){
+    // typed answer
+    input.style.display=''; input.value=''; input.disabled=false;
+    optBox.style.display='none';
+    goBtn.style.display='inline-block'; goBtn.disabled=false;
+    setTimeout(()=>input.focus(),100);
+  } else {
+    // tappable options — submit instantly on tap
+    input.style.display='none';
+    goBtn.style.display='none';
+    optBox.style.display='block';
+    p.options.forEach(opt=>{
+      const b=document.createElement('button');
+      b.className='big '+(p.mode==='truefalse'?(opt==='True'?'':'alt'):'alt');
+      b.textContent=opt;
+      b.onclick=()=>{ if(answered) return; submitChoice(opt); };
+      optBox.appendChild(b);
+    });
+  }
+}
 function submitAnswer(){
   if(answered) return; answered=true;
   const ans=document.getElementById('answerInput').value.trim();
   socket.emit('input',{ t:'answer', answer:ans });
+  lockJoinerInput();
+}
+function submitChoice(opt){
+  if(answered) return; answered=true;
+  socket.emit('input',{ t:'answer', answer:opt });
+  lockJoinerInput();
+}
+function lockJoinerInput(){
   document.getElementById('answerInput').disabled=true;
   document.getElementById('answerGo').style.display='none';
+  document.getElementById('answerOptions').style.display='none';
   document.getElementById('aWaiting').style.display='block';
 }
 function showRevealJoiner(r){ show('revealScreen');
@@ -425,7 +534,12 @@ document.getElementById('answerInput').addEventListener('keydown',e=>{ if(e.key=
 
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-
+/* =============================================================================
+   CHILL JAZZ — generated live with Tone.js, no audio files, copyright-free.
+   A soft lounge loop: mellow electric-piano 7th chords, a walking upright bass,
+   and a gentle brushed-cymbal pulse. Starts on first user tap (phones block
+   autoplay until then). Toggle with the 🎵 button.
+   ============================================================================= */
 let musicOn=true, musicStarted=false, jazzParts=[];
 
 async function startJazz(){

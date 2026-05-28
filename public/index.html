@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Finish the Verse — A Bible Party Game (v3)</title>
+<title>Finish the Verse — A Bible Party Game (v4)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
   :root{
@@ -84,6 +84,7 @@
 </head>
 <body>
 <div class="net" id="net"><span class="dot"></span><span id="netT">connecting…</span></div>
+<div class="net" id="musicBtn" style="left:auto;right:8px;cursor:pointer;" onclick="toggleMusic()">🎵 Jazz: on</div>
 <div id="app">
 
   <!-- LANDING -->
@@ -186,6 +187,7 @@
 
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script>
 /* =============================================================================
@@ -421,9 +423,96 @@ document.getElementById('answerInput').addEventListener('keydown',e=>{ if(e.key=
 
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+/* =============================================================================
+   CHILL JAZZ — generated live with Tone.js, no audio files, copyright-free.
+   A soft lounge loop: mellow electric-piano 7th chords, a walking upright bass,
+   and a gentle brushed-cymbal pulse. Starts on first user tap (phones block
+   autoplay until then). Toggle with the 🎵 button.
+   ============================================================================= */
+let musicOn=true, musicStarted=false, jazzParts=[];
+
+async function startJazz(){
+  if(musicStarted || typeof Tone==='undefined') return;
+  musicStarted=true;
+  await Tone.start();                       // unlock audio (needs a user gesture)
+  Tone.Transport.bpm.value = 76;            // slow, relaxed swing
+
+  // soft electric-piano-ish chords
+  const piano = new Tone.PolySynth(Tone.Synth, {
+    oscillator:{ type:'triangle' },
+    envelope:{ attack:0.04, decay:0.6, sustain:0.25, release:1.6 }
+  }).toDestination();
+  piano.volume.value = -16;
+
+  // warm upright-bass-ish voice
+  const bass = new Tone.Synth({
+    oscillator:{ type:'sine' },
+    envelope:{ attack:0.03, decay:0.3, sustain:0.4, release:0.8 }
+  }).toDestination();
+  bass.volume.value = -10;
+
+  // brushed-drum pulse (filtered noise)
+  const brush = new Tone.NoiseSynth({
+    noise:{ type:'pink' },
+    envelope:{ attack:0.01, decay:0.12, sustain:0 }
+  }).toDestination();
+  brush.volume.value = -26;
+
+  // a gentle ii–V–I–vi loop in F major (classic chill-jazz turnaround)
+  const chords = [
+    ['G3','Bb3','D4','F4'],   // Gm7
+    ['C3','E3','G3','Bb3'],   // C7
+    ['F3','A3','C4','E4'],    // Fmaj7
+    ['D3','F3','A3','C4'],    // Dm7
+  ];
+  const bassNotes = ['G2','C2','F2','D2'];
+
+  let bar=0;
+  const chordPart = new Tone.Loop(time=>{
+    const c = chords[bar % chords.length];
+    piano.triggerAttackRelease(c, '2n', time, 0.5);
+    bar++;
+  }, '1m').start(0);
+
+  const walkPart = new Tone.Loop(time=>{
+    const root = bassNotes[(bar) % bassNotes.length];
+    // simple walking feel: root on 1, a little movement on 3
+    bass.triggerAttackRelease(root, '4n', time, 0.7);
+    bass.triggerAttackRelease(root, '4n', time + Tone.Time('2n'), 0.5);
+  }, '1m').start(0);
+
+  const brushPart = new Tone.Loop(time=>{
+    brush.triggerAttackRelease('8n', time);
+    brush.triggerAttackRelease('8n', time + Tone.Time('4n'));
+    brush.triggerAttackRelease('8n', time + Tone.Time('2n'));
+    brush.triggerAttackRelease('8n', time + Tone.Time('2n.') );
+  }, '1m').start(0);
+
+  jazzParts = [chordPart, walkPart, brushPart];
+  if(musicOn) Tone.Transport.start();
+}
+
+function toggleMusic(){
+  musicOn = !musicOn;
+  const b=document.getElementById('musicBtn');
+  b.textContent = musicOn ? '🎵 Jazz: on' : '🔇 Jazz: off';
+  if(typeof Tone==='undefined') return;
+  if(musicOn){ if(!musicStarted) startJazz(); else Tone.Transport.start(); }
+  else { Tone.Transport.pause(); }
+}
+
+/* kick the music off on the very first tap/click anywhere (autoplay unlock) */
+function firstGestureStart(){ if(musicOn) startJazz(); 
+  window.removeEventListener('pointerdown', firstGestureStart);
+  window.removeEventListener('keydown', firstGestureStart); }
+window.addEventListener('pointerdown', firstGestureStart);
+window.addEventListener('keydown', firstGestureStart);
+
 /* auto-join via ?room=CODE (from QR) */
 (function(){ const r=new URLSearchParams(location.search).get('room');
   if(r){ pendingCode=r.toUpperCase(); isHost=false; flow='join'; show('nameScreen'); } })();
+
+
 </script>
 </body>
 </html>

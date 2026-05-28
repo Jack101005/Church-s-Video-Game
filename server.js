@@ -1,21 +1,3 @@
-/* =============================================================================
-   Together We Rise — ONLINE SERVER
-   -----------------------------------------------------------------------------
-   Role of this server (host-authoritative model):
-     - It does NOT run the game physics. One player's browser (the "host") does.
-     - This server's job is to be the meeting point: it manages ROOMS, tracks who
-       is in each room, and RELAYS messages between players.
-     - Flow:
-         1. Host browser asks to create a room  -> server makes a 4-letter code.
-         2. Other players scan a QR / open a link with ?room=CODE and join.
-         3. Each non-host player sends their INPUT (left/right/jump/boost) up.
-         4. Server forwards those inputs to the host.
-         5. Host runs physics, then sends a WORLD SNAPSHOT to the server.
-         6. Server broadcasts that snapshot to everyone else ~20x/sec.
-     - Why this design? Writing physics once (in the client we already built) is
-       far simpler than re-implementing it on the server. Good enough for friends.
-   ============================================================================= */
-
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -34,11 +16,7 @@ const io = new Server(httpServer, {
 // Serve the client (everything in /public) as static files.
 app.use(express.static(join(__dirname, 'public')));
 
-/* ---------------------------------------------------------------------------
-   ROOM STATE
-   rooms = { CODE: { hostId, players: { socketId: {name,color,face} }, createdAt } }
-   We keep this in memory. If the server restarts, rooms vanish — acceptable here.
-   --------------------------------------------------------------------------- */
+
 const rooms = {};
 
 function makeCode() {
@@ -67,10 +45,7 @@ app.get('/qr', async (req, res) => {
 /* Health check — handy for Railway and for warming the instance before a session. */
 app.get('/healthz', (_req, res) => res.send('ok'));
 
-/* ---------------------------------------------------------------------------
-   SOCKET WIRING
-   Each connected browser is one "socket". We listen for a small set of events.
-   --------------------------------------------------------------------------- */
+
 io.on('connection', (socket) => {
   // which room this socket is in (filled once they create/join)
   let joinedRoom = null;
@@ -124,10 +99,7 @@ io.on('connection', (socket) => {
     socket.to(joinedRoom).volatile.emit('snapshot', snap);
   });
 
-  /* HOST can broadcast questions/reveals/etc to everyone else in the room.
-     Robustness: if the host briefly reconnected and got a new socket id, the
-     old hostId check would silently drop every event. So if this socket is in
-     the room and claims host, we refresh hostId to match. */
+
   socket.on('hostEvent', (evt) => {
     if (!joinedRoom) { console.log('[hostEvent] dropped: no joinedRoom for', socket.id); return; }
     const room = rooms[joinedRoom];

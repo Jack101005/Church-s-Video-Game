@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Finish the Verse — A Bible Party Game (v4)</title>
+<title>Finish the Verse — A Bible Party Game (v5)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
   :root{
@@ -190,14 +190,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script>
-/* =============================================================================
-   FINISH THE VERSE — submit-based Bible party game.
-   No real-time physics: each phone sends ONE answer per round, the host
-   collects them and broadcasts the reveal + scores. Lag-proof by design.
-   Roles: HOST drives rounds; JOINERS submit answers.
-   Reuses the same server relay: joiners use 'input' to send answers,
-   host uses 'hostEvent' to broadcast questions/reveals.
-   ============================================================================= */
+
 const socket = io({ transports:['websocket','polling'] });
 let myId=null, myRoom=null, isHost=false, myName='';
 let players={};        // id -> {name}
@@ -210,31 +203,40 @@ socket.on('disconnect',()=>{ netT.textContent='reconnecting…'; netEl.classList
 function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));
   document.getElementById(id).classList.add('show'); }
 
-/* ---------------- STARTER VERSES (edit freely) ----------------
-   Each: text with ___ for the blank, the accepted answer(s), and reference.
-   'accept' lists acceptable answers (lowercased, punctuation ignored on compare).
-   Keep blanks to a few words so they're guessable. */
+
 const VERSES = [
-  { before:"The Lord is my shepherd; I shall not", blank:"want", after:".",
-    accept:["want","be in want"], ref:"Psalm 23:1" },
+  // ---- The love of God ----
   { before:"For God so loved the", blank:"world", after:", that he gave his only Son…",
     accept:["world"], ref:"John 3:16" },
-  { before:"I can do all things through", blank:"Christ", after:" who strengthens me.",
-    accept:["christ","him","god"], ref:"Philippians 4:13" },
-  { before:"Trust in the Lord with all your", blank:"heart", after:", and lean not on your own understanding.",
-    accept:["heart"], ref:"Proverbs 3:5" },
-  { before:"In the beginning God created the heavens and the", blank:"earth", after:".",
-    accept:["earth"], ref:"Genesis 1:1" },
-  { before:"Be still, and know that I am", blank:"God", after:".",
-    accept:["god"], ref:"Psalm 46:10" },
-  { before:"Love is patient, love is", blank:"kind", after:".",
-    accept:["kind"], ref:"1 Corinthians 13:4" },
-  { before:"Your word is a lamp to my feet and a", blank:"light", after:" to my path.",
-    accept:["light"], ref:"Psalm 119:105" },
+  { before:"We love because he first", blank:"loved", after:" us.",
+    accept:["loved","loved us"], ref:"1 John 4:19" },
+  { before:"God is", blank:"love", after:". Whoever abides in love abides in God.",
+    accept:["love"], ref:"1 John 4:16" },
+  { before:"See what kind of love the Father has given to us, that we should be called children of",
+    blank:"God", after:".", accept:["god"], ref:"1 John 3:1" },
+  { before:"Nothing can separate us from the love of", blank:"God", after:" in Christ Jesus our Lord.",
+    accept:["god","christ","christ jesus"], ref:"Romans 8:39" },
+  { before:"The steadfast love of the Lord never", blank:"ends", after:"; his mercies are new every morning.",
+    accept:["ends","ceases"], ref:"Lamentations 3:22" },
+  { before:"As the Father has loved me, so have I loved you. Abide in my", blank:"love", after:".",
+    accept:["love"], ref:"John 15:9" },
+  // ---- Purpose & calling ----
+  { before:"For I know the plans I have for you, declares the Lord, plans for", blank:"welfare", after:" and not for evil, to give you a future and a hope.",
+    accept:["welfare","peace","good"], ref:"Jeremiah 29:11" },
   { before:"And we know that for those who love God all things work together for",
     blank:"good", after:".", accept:["good"], ref:"Romans 8:28" },
-  { before:"Cast all your anxiety on him because he", blank:"cares", after:" for you.",
-    accept:["cares","cares for you"], ref:"1 Peter 5:7" },
+  { before:"For we are his workmanship, created in Christ Jesus for good",
+    blank:"works", after:", which God prepared beforehand.", accept:["works","good works"], ref:"Ephesians 2:10" },
+  { before:"Whatever you do, work heartily, as for the Lord and not for",
+    blank:"men", after:".", accept:["men","man","people"], ref:"Colossians 3:23" },
+  { before:"Trust in the Lord with all your", blank:"heart", after:", and lean not on your own understanding.",
+    accept:["heart"], ref:"Proverbs 3:5" },
+  { before:"I can do all things through", blank:"Christ", after:" who strengthens me.",
+    accept:["christ","him","god"], ref:"Philippians 4:13" },
+  { before:"Commit your work to the Lord, and your plans will be",
+    blank:"established", after:".", accept:["established"], ref:"Proverbs 16:3" },
+  { before:"Your word is a lamp to my feet and a", blank:"light", after:" to my path.",
+    accept:["light"], ref:"Psalm 119:105" },
 ];
 let roundOrder=[], roundIdx=0;
 const ROUND_SECONDS=20;
@@ -423,12 +425,7 @@ document.getElementById('answerInput').addEventListener('keydown',e=>{ if(e.key=
 
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-/* =============================================================================
-   CHILL JAZZ — generated live with Tone.js, no audio files, copyright-free.
-   A soft lounge loop: mellow electric-piano 7th chords, a walking upright bass,
-   and a gentle brushed-cymbal pulse. Starts on first user tap (phones block
-   autoplay until then). Toggle with the 🎵 button.
-   ============================================================================= */
+
 let musicOn=true, musicStarted=false, jazzParts=[];
 
 async function startJazz(){

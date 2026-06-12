@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Finish the Verse — A Bible Party Game (v12)</title>
+<title>Finish the Verse — A Bible Party Game (v13)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
   @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
@@ -184,6 +185,25 @@
     </div>
   </div>
 
+  <!-- JOIN SELFIE (becomes your board character) -->
+  <div class="screen" id="charScreen">
+    <div class="card">
+      <h1 style="font-size:clamp(20px,5.5vw,30px)">Make Your Character</h1>
+      <p class="sub">Take a selfie — it becomes your token on the board! 🎮</p>
+      <video id="charVideo" autoplay playsinline style="width:min(64vw,220px);height:min(64vw,220px);object-fit:cover;border-radius:50%;border:6px solid var(--ink);background:#000;transform:scaleX(-1);"></video>
+      <canvas id="charShot" style="display:none;width:min(64vw,220px);height:min(64vw,220px);border-radius:50%;border:6px solid var(--ink);transform:scaleX(-1);"></canvas>
+      <div id="charCamRow">
+        <button class="big gold" onclick="charSnap()">📸 Snap</button>
+        <button class="big alt" onclick="charSkip()">Skip (use initial)</button>
+      </div>
+      <div id="charConfirmRow" style="display:none">
+        <button class="big gold" onclick="charUse()">✓ Use this</button>
+        <button class="big alt" onclick="charRetake()">↺ Retake</button>
+      </div>
+      <p class="err" id="charErr"></p>
+    </div>
+  </div>
+
   <!-- LOBBY -->
   <div class="screen" id="lobby">
     <div class="card">
@@ -308,7 +328,7 @@ const VERSES = [
   { before:"See what kind of love the Father has given to us, that we should be called children of",
     blank:"God", after:".", accept:["god"], ref:"1 John 3:1", emoji:"👑❤️👶👧👦" },
   { before:"Nothing can separate us from the love of", blank:"God", after:" in Christ Jesus our Lord.",
-    accept:["god","christ","christ jesus"], ref:"Romans 8:39", emoji:"🚫✂️��❤️" },
+    accept:["god","christ","christ jesus"], ref:"Romans 8:39", emoji:"🚫✂️👑❤️" },
   { before:"The steadfast love of the Lord never", blank:"ends", after:"; his mercies are new every morning.",
     accept:["ends","ceases"], ref:"Lamentations 3:22", emoji:"👑❤️♾️🌅🔄" },
   { before:"As the Father has loved me, so have I loved you. Abide in my", blank:"love", after:".",
@@ -323,7 +343,7 @@ const VERSES = [
   { before:"Whatever you do, work heartily, as for the Lord and not for",
     blank:"men", after:".", accept:["men","man","people"], ref:"Colossians 3:23", emoji:"💪🛠️👑🙌" },
   { before:"Trust in the Lord with all your", blank:"heart", after:", and lean not on your own understanding.",
-    accept:["heart"], ref:"Proverbs 3:5", emoji:"🤝👑💯❤️🚫��" },
+    accept:["heart"], ref:"Proverbs 3:5", emoji:"🤝👑💯❤️🚫🧠" },
   { before:"I can do all things through", blank:"Christ", after:" who strengthens me.",
     accept:["christ","him","god"], ref:"Philippians 4:13", emoji:"💪🌟✝️" },
   { before:"Commit your work to the Lord, and your plans will be",
@@ -365,9 +385,44 @@ document.getElementById('nameGo').onclick=()=>{
   if(!n){ document.getElementById('nameErr').textContent='Please enter a name.'; return; }
   myName=n;
   if(flow==='host'){ show('modeScreen'); }   // host picks which game first
-  else { playIntro(myName, doJoin); }        // joiner sees the animated welcome, then joins
+  else { playIntro(myName, ()=>{ show('charScreen'); startCharCam(); }); }  // joiner: intro, then make character
 };
 function pickGame(type){ gameType=type; doCreate(); }
+
+/* ---- join-time selfie: becomes the player's board token ---- */
+let myCharPhoto=null, charStream=null;
+async function startCharCam(){
+  const v=document.getElementById('charVideo'), s=document.getElementById('charShot');
+  v.style.display=''; s.style.display='none';
+  document.getElementById('charCamRow').style.display='block';
+  document.getElementById('charConfirmRow').style.display='none';
+  try{ charStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:320},height:{ideal:320}},audio:false});
+    v.srcObject=charStream;
+  }catch(e){ document.getElementById('charErr').textContent="Camera blocked — tap Skip to use your initial."; }
+}
+function charSnap(){
+  const v=document.getElementById('charVideo'), s=document.getElementById('charShot');
+  const size=Math.min(v.videoWidth,v.videoHeight)||240;
+  s.width=120; s.height=120;
+  const sx=(v.videoWidth-size)/2, sy=(v.videoHeight-size)/2, c=s.getContext('2d');
+  c.save(); c.translate(120,0); c.scale(-1,1); c.drawImage(v,sx,sy,size,size,0,0,120,120); c.restore();
+  v.style.display='none'; s.style.display='';
+  document.getElementById('charCamRow').style.display='none';
+  document.getElementById('charConfirmRow').style.display='block';
+}
+function charRetake(){ const v=document.getElementById('charVideo'), s=document.getElementById('charShot');
+  v.style.display=''; s.style.display='none';
+  document.getElementById('charCamRow').style.display='block';
+  document.getElementById('charConfirmRow').style.display='none'; }
+function charUse(){
+  const s=document.getElementById('charShot');
+  const c=document.createElement('canvas'); c.width=96;c.height=96; const cc=c.getContext('2d');
+  cc.save(); cc.beginPath(); cc.arc(48,48,48,0,7); cc.clip(); cc.drawImage(s,0,0,96,96); cc.restore();
+  myCharPhoto=c.toDataURL('image/jpeg',0.6);
+  stopCharCam(); doJoin();
+}
+function charSkip(){ myCharPhoto=null; stopCharCam(); doJoin(); }
+function stopCharCam(){ if(charStream){ charStream.getTracks().forEach(t=>t.stop()); charStream=null; } }
 
 /* cinematic staged intro: "Welcome to ... JIL GAME" with triumphant music */
 let introSkipped=false, introDone=null;
@@ -447,7 +502,10 @@ function doCreate(){ socket.emit('createRoom',{name:myName},(res)=>{
   myRoom=res.code; isHost=true; enterLobby(); showQR(); }); }
 function doJoin(){ socket.emit('joinRoom',{code:pendingCode,player:{name:myName}},(res)=>{
   if(!res||!res.ok){ show('joinScreen'); document.getElementById('joinErr').textContent=res?res.error:'Join failed'; return; }
-  myRoom=res.code; isHost=false; enterLobby(); }); }
+  myRoom=res.code; isHost=false; enterLobby();
+  // send my character photo to the host (same relay as end-game selfies)
+  if(myCharPhoto){ setTimeout(()=>socket.emit('input',{ t:'charPhoto', photo:myCharPhoto }), 300); }
+}); }
 
 function enterLobby(){ show('lobby');
   document.getElementById('hostLobby').style.display=isHost?'block':'none';
@@ -568,6 +626,10 @@ socket.on('input',({id,state})=>{
     // re-broadcast the leaderboard so every screen shows the new face
     socket.emit('hostEvent',{t:'final',scores:scoreboard(),photos:playerPhotos});
     showFinal(scoreboard(), playerPhotos);
+  }
+  else if(state && state.t==='charPhoto'){
+    playerPhotos[id]=state.photo;   // store as their board token face
+    if(raceActive) drawBoard();     // refresh board if the race is already showing
   }
 });
 function renderSubmittedTags(){ const box=document.getElementById('submittedTags'); if(!box) return;
@@ -738,7 +800,7 @@ function showQuestionJoiner(p){ show('aScreen');
   if(p.mode==='blank'||p.mode==='choice'||p.mode==='wager'){
     vb.innerHTML = esc(p.before)+' <span class="blank"></span> '+esc(p.after);
   } else if(p.mode==='scramble'){
-    vb.innerHTML = (p.partial?'Rebuild the START of the verse 👇':'Rebuild the verse 👇')+'<div class="ref">'+esc(p.ref)+'</div>';
+    vb.innerHTML = (p.partial?'Rebuild the START of the verse 👇':'Rebuild the verse ��')+'<div class="ref">'+esc(p.ref)+'</div>';
   } else if(p.mode==='emoji'){
     vb.innerHTML = '<span style="font-size:clamp(34px,11vw,54px);letter-spacing:4px;">'+esc(p.emoji)+'</span>';
   } else {
@@ -1018,24 +1080,58 @@ function spaceXY(n){
   const y=480-(row*cell+cell/2);                    // bottom-up
   return {x,y};
 }
+// cache loaded token face images so canvas can draw them
+const faceImgCache={};
+function getFaceImg(id){
+  const src=playerPhotos[id]; if(!src) return null;
+  if(faceImgCache[id] && faceImgCache[id]._src===src) return faceImgCache[id];
+  const im=new Image(); im._src=src; im.onload=()=>drawBoard(); im.src=src;
+  faceImgCache[id]=im; return im;
+}
+const CANDY=['#ff6b9d','#ffd23f','#7ad7f0','#9b8cff','#7be495','#ffa45c'];
 function drawBoard(){
   const cv=document.getElementById('boardCanvas'); if(!cv) return;
   const g=cv.getContext('2d'); g.clearRect(0,0,520,520);
-  // path
+  // soft candy sky background
+  const bg=g.createLinearGradient(0,0,0,520); bg.addColorStop(0,'#fff0f8'); bg.addColorStop(1,'#eafaff');
+  g.fillStyle=bg; g.fillRect(0,0,520,520);
+  // connecting ribbon path (draw thick line through all spaces first)
+  g.beginPath();
+  for(let i=0;i<=BOARD_SPACES;i++){ const {x,y}=spaceXY(i); if(i===0) g.moveTo(x,y); else g.lineTo(x,y); }
+  g.lineWidth=20; g.strokeStyle='#ffffff'; g.lineCap='round'; g.lineJoin='round'; g.stroke();
+  g.lineWidth=12; g.strokeStyle='#ffe1f0'; g.stroke();
+  // candy spaces
   for(let i=0;i<=BOARD_SPACES;i++){ const {x,y}=spaceXY(i);
-    g.beginPath(); g.arc(x,y,22,0,7);
-    g.fillStyle = i===0 ? '#46c66b' : i===BOARD_SPACES ? '#ffd23f' : '#f3e8ff';
-    g.fill(); g.lineWidth=3; g.strokeStyle='#1d1b3a'; g.stroke();
-    g.fillStyle='#1d1b3a'; g.font='bold 12px Fredoka'; g.textAlign='center'; g.textBaseline='middle';
+    g.beginPath(); g.arc(x,y,19,0,7);
+    if(i===0){ g.fillStyle='#7be495'; }
+    else if(i===BOARD_SPACES){ g.fillStyle='#ffd23f'; }
+    else { g.fillStyle=CANDY[i%CANDY.length]; }
+    g.fill(); g.lineWidth=3; g.strokeStyle='#fff'; g.stroke();
+    g.lineWidth=2; g.strokeStyle='#1d1b3a44'; g.stroke();
+    // label
+    g.fillStyle='#1d1b3a'; g.font='bold 11px Fredoka'; g.textAlign='center'; g.textBaseline='middle';
     g.fillText(i===0?'START':i===BOARD_SPACES?'🏁':i, x, y);
   }
-  // tokens
+  // tokens = player photo circles hopping along
   const ids=Object.keys(racePos);
   ids.forEach((id,k)=>{ const {x,y}=spaceXY(racePos[id]);
-    const off=(k-(ids.length-1)/2)*12;
-    g.beginPath(); g.arc(x+off,y-26,10,0,7);
-    g.fillStyle=['#ff5a5a','#4d8cff','#46c66b','#8b5cf6','#ffd23f','#ff9f43'][k%6];
-    g.fill(); g.lineWidth=2; g.strokeStyle='#1d1b3a'; g.stroke();
+    const ang=(k/Math.max(1,ids.length))*6.28; const ox=Math.cos(ang)*14, oy=Math.sin(ang)*14-20;
+    const tx=x+ox, ty=y+oy, R=16;
+    // ring
+    g.beginPath(); g.arc(tx,ty,R+2,0,7); g.fillStyle=CANDY[k%CANDY.length]; g.fill();
+    const img=getFaceImg(id);
+    if(img && img.complete && img.naturalWidth){
+      g.save(); g.beginPath(); g.arc(tx,ty,R,0,7); g.clip();
+      g.drawImage(img,tx-R,ty-R,R*2,R*2); g.restore();
+      g.beginPath(); g.arc(tx,ty,R,0,7); g.lineWidth=3; g.strokeStyle='#fff'; g.stroke();
+    } else {
+      // fallback: initial on a colored disc
+      g.beginPath(); g.arc(tx,ty,R,0,7); g.fillStyle='#fff'; g.fill();
+      g.lineWidth=3; g.strokeStyle=CANDY[k%CANDY.length]; g.stroke();
+      const nm=(players[id]&&players[id].name)?players[id].name[0].toUpperCase():'?';
+      g.fillStyle='#1d1b3a'; g.font='bold 16px Bungee'; g.textAlign='center'; g.textBaseline='middle';
+      g.fillText(nm,tx,ty);
+    }
   });
 }
 
@@ -1112,7 +1208,7 @@ socket.on('hostEvent',(evt)=>{
   else if(evt.t==='raceQ'){ raceAnswered=false; showRaceQuestion(evt); }
   else if(evt.t==='raceResult'){ showRaceResult(evt); }
   else if(evt.t==='raceWin'){ show('aScreen');
-    document.getElementById('aPrompt').textContent='�� '+evt.name+' won the race!';
+    document.getElementById('aPrompt').textContent='🏆 '+evt.name+' won the race!';
     document.getElementById('aVersebox').innerHTML='Thanks for playing! 🎉';
     document.getElementById('answerOptions').style.display='none';
     document.getElementById('aWaiting').style.display='none';

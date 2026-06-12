@@ -1,1188 +1,856 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Finish the Verse — A Bible Party Game (v8)</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Finish the Verse — A Bible Party Game (v9)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
+  @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
+  :root{
+    --ink:#1d1b3a; --gold:#ffd23f; --brick:#c8612f; --panel:#fff7e8;
+    --p1:#ff5a5a; --p2:#4d8cff; --p3:#46c66b; --purple:#8b5cf6;
+    --bg1:#6a5cff; --bg2:#b06cff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;min-height:100%;overflow-x:hidden;
+    font-family:'Fredoka',sans-serif;touch-action:manipulation;
+    background:linear-gradient(160deg,var(--bg1),var(--bg2));color:var(--ink);}
+  #app{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;}
+  .screen{display:none;flex-direction:column;align-items:center;text-align:center;width:100%;max-width:560px;}
+  .screen.show{display:flex;}
+  .card{background:linear-gradient(180deg,#fff,#ffe9c2);border:6px solid var(--ink);
+    border-radius:24px;padding:26px;box-shadow:0 12px 0 rgba(0,0,0,.3);width:100%;}
+  h1{font-family:'Bungee',cursive;color:var(--brick);margin:0 0 6px;font-size:clamp(26px,7vw,46px);
+    text-shadow:3px 3px 0 var(--ink),-1px -1px 0 #fff;line-height:1;}
+  .sub{font-weight:700;font-size:clamp(13px,3.5vw,17px);margin:0 0 16px;opacity:.85;}
+  .verse{font-style:italic;color:#5a4a2a;font-size:13px;margin:8px 0 18px;}
+  button.big{font-family:'Bungee',cursive;font-size:clamp(15px,4.2vw,22px);color:#fff;
+    background:var(--p3);border:4px solid var(--ink);border-radius:16px;padding:14px 26px;cursor:pointer;
+    box-shadow:0 6px 0 #2c6e1a;transition:transform .06s,box-shadow .06s;margin:6px;width:100%;max-width:340px;}
+  button.big:active{transform:translateY(4px);box-shadow:0 2px 0 #2c6e1a;}
+  button.alt{background:var(--p2);box-shadow:0 6px 0 #2659b3;}
+  button.alt:active{box-shadow:0 2px 0 #2659b3;}
+  button.gold{background:var(--gold);color:var(--ink);box-shadow:0 6px 0 #c9a200;}
+  button.gold:active{box-shadow:0 2px 0 #c9a200;}
+  button:disabled{opacity:.5;}
+  input.txt{width:100%;border:3px solid var(--ink);border-radius:12px;text-align:center;
+    font-family:'Fredoka';font-weight:700;font-size:18px;padding:12px;margin:8px 0;}
+  input.code{letter-spacing:6px;text-transform:uppercase;font-family:'Bungee';font-size:26px;}
+  .err{color:#c0392b;font-weight:700;font-size:13px;min-height:18px;}
+  .net{position:fixed;top:8px;left:8px;background:#ffffffcc;border:3px solid var(--ink);
+    border-radius:14px;padding:3px 10px;font-size:12px;font-weight:700;z-index:50;}
+  .net .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#46c66b;margin-right:5px;}
+  .net.bad .dot{background:#c0392b;}
 
-    @keyframes blink {
+  /* QR + lobby */
+  .qrbox{background:#fff;border:5px solid var(--ink);border-radius:16px;padding:12px;display:inline-block;margin:8px 0;}
+  .qrbox img{width:200px;height:200px;display:block;image-rendering:pixelated;}
+  .codebig{font-family:'Bungee';font-size:40px;color:var(--brick);letter-spacing:8px;margin:6px 0;}
+  .players{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0;}
+  .pchip{background:var(--purple);color:#fff;border:3px solid var(--ink);border-radius:18px;
+    padding:6px 14px;font-weight:700;font-size:14px;}
+  .pchip.host{background:var(--gold);color:var(--ink);}
 
-      0%,
-      50% {
-        opacity: 1;
-      }
+  /* question display (host screen) */
+  .qbig{font-family:'Bungee';color:var(--brick);font-size:clamp(13px,3.4vw,18px);margin-bottom:6px;}
+  .versebox{background:#fff;border:5px solid var(--ink);border-radius:18px;padding:24px 20px;margin:14px 0;
+    font-size:clamp(20px,6vw,34px);font-weight:700;line-height:1.4;color:var(--ink);}
+  .blank{display:inline-block;min-width:90px;border-bottom:5px solid var(--brick);margin:0 6px;}
+  .ref{font-family:'Bungee';color:var(--p2);font-size:14px;margin-top:6px;}
+  .timer{font-family:'Bungee';font-size:34px;color:var(--brick);}
+  .timer.low{color:#c0392b;}
+  .submitted{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-top:10px;}
+  .stag{background:var(--p3);color:#fff;border:2px solid var(--ink);border-radius:14px;padding:3px 10px;font-size:12px;font-weight:700;}
 
-      51%,
-      100% {
-        opacity: 0;
-      }
-    }
+  /* answer entry (joiner phone) */
+  .reveal{font-size:clamp(22px,7vw,38px);font-weight:700;color:var(--p3);}
+  .answerline{background:#fff;border:4px solid var(--ink);border-radius:14px;padding:12px;margin:8px 0;
+    display:flex;justify-content:space-between;align-items:center;font-weight:700;}
+  .answerline .who{font-size:14px;} .answerline .pts{font-family:'Bungee';color:var(--brick);}
+  .answerline.correct{background:#d8f5cf;}
+  .answerline.wrong{background:#ffe0e0;}
 
-    :root {
-      --ink: #1d1b3a;
-      --gold: #ffd23f;
-      --brick: #c8612f;
-      --panel: #fff7e8;
-      --p1: #ff5a5a;
-      --p2: #4d8cff;
-      --p3: #46c66b;
-      --purple: #8b5cf6;
-      --bg1: #6a5cff;
-      --bg2: #b06cff;
-    }
-
-    * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      min-height: 100%;
-      overflow-x: hidden;
-      font-family: 'Fredoka', sans-serif;
-      touch-action: manipulation;
-      background: linear-gradient(160deg, var(--bg1), var(--bg2));
-      color: var(--ink);
-    }
-
-    #app {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-
-    .screen {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      width: 100%;
-      max-width: 560px;
-    }
-
-    .screen.show {
-      display: flex;
-    }
-
-    .card {
-      background: linear-gradient(180deg, #fff, #ffe9c2);
-      border: 6px solid var(--ink);
-      border-radius: 24px;
-      padding: 26px;
-      box-shadow: 0 12px 0 rgba(0, 0, 0, .3);
-      width: 100%;
-    }
-
-    h1 {
-      font-family: 'Bungee', cursive;
-      color: var(--brick);
-      margin: 0 0 6px;
-      font-size: clamp(26px, 7vw, 46px);
-      text-shadow: 3px 3px 0 var(--ink), -1px -1px 0 #fff;
-      line-height: 1;
-    }
-
-    .sub {
-      font-weight: 700;
-      font-size: clamp(13px, 3.5vw, 17px);
-      margin: 0 0 16px;
-      opacity: .85;
-    }
-
-    .verse {
-      font-style: italic;
-      color: #5a4a2a;
-      font-size: 13px;
-      margin: 8px 0 18px;
-    }
-
-    button.big {
-      font-family: 'Bungee', cursive;
-      font-size: clamp(15px, 4.2vw, 22px);
-      color: #fff;
-      background: var(--p3);
-      border: 4px solid var(--ink);
-      border-radius: 16px;
-      padding: 14px 26px;
-      cursor: pointer;
-      box-shadow: 0 6px 0 #2c6e1a;
-      transition: transform .06s, box-shadow .06s;
-      margin: 6px;
-      width: 100%;
-      max-width: 340px;
-    }
-
-    button.big:active {
-      transform: translateY(4px);
-      box-shadow: 0 2px 0 #2c6e1a;
-    }
-
-    button.alt {
-      background: var(--p2);
-      box-shadow: 0 6px 0 #2659b3;
-    }
-
-    button.alt:active {
-      box-shadow: 0 2px 0 #2659b3;
-    }
-
-    button.gold {
-      background: var(--gold);
-      color: var(--ink);
-      box-shadow: 0 6px 0 #c9a200;
-    }
-
-    button.gold:active {
-      box-shadow: 0 2px 0 #c9a200;
-    }
-
-    button:disabled {
-      opacity: .5;
-    }
-
-    input.txt {
-      width: 100%;
-      border: 3px solid var(--ink);
-      border-radius: 12px;
-      text-align: center;
-      font-family: 'Fredoka';
-      font-weight: 700;
-      font-size: 18px;
-      padding: 12px;
-      margin: 8px 0;
-    }
-
-    input.code {
-      letter-spacing: 6px;
-      text-transform: uppercase;
-      font-family: 'Bungee';
-      font-size: 26px;
-    }
-
-    .err {
-      color: #c0392b;
-      font-weight: 700;
-      font-size: 13px;
-      min-height: 18px;
-    }
-
-    .net {
-      position: fixed;
-      top: 8px;
-      left: 8px;
-      background: #ffffffcc;
-      border: 3px solid var(--ink);
-      border-radius: 14px;
-      padding: 3px 10px;
-      font-size: 12px;
-      font-weight: 700;
-      z-index: 50;
-    }
-
-    .net .dot {
-      display: inline-block;
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: #46c66b;
-      margin-right: 5px;
-    }
-
-    .net.bad .dot {
-      background: #c0392b;
-    }
-
-    /* QR + lobby */
-    .qrbox {
-      background: #fff;
-      border: 5px solid var(--ink);
-      border-radius: 16px;
-      padding: 12px;
-      display: inline-block;
-      margin: 8px 0;
-    }
-
-    .qrbox img {
-      width: 200px;
-      height: 200px;
-      display: block;
-      image-rendering: pixelated;
-    }
-
-    .codebig {
-      font-family: 'Bungee';
-      font-size: 40px;
-      color: var(--brick);
-      letter-spacing: 8px;
-      margin: 6px 0;
-    }
-
-    .players {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: center;
-      margin: 14px 0;
-    }
-
-    .pchip {
-      background: var(--purple);
-      color: #fff;
-      border: 3px solid var(--ink);
-      border-radius: 18px;
-      padding: 6px 14px;
-      font-weight: 700;
-      font-size: 14px;
-    }
-
-    .pchip.host {
-      background: var(--gold);
-      color: var(--ink);
-    }
-
-    /* question display (host screen) */
-    .qbig {
-      font-family: 'Bungee';
-      color: var(--brick);
-      font-size: clamp(13px, 3.4vw, 18px);
-      margin-bottom: 6px;
-    }
-
-    .versebox {
-      background: #fff;
-      border: 5px solid var(--ink);
-      border-radius: 18px;
-      padding: 24px 20px;
-      margin: 14px 0;
-      font-size: clamp(20px, 6vw, 34px);
-      font-weight: 700;
-      line-height: 1.4;
-      color: var(--ink);
-    }
-
-    .blank {
-      display: inline-block;
-      min-width: 90px;
-      border-bottom: 5px solid var(--brick);
-      margin: 0 6px;
-    }
-
-    .ref {
-      font-family: 'Bungee';
-      color: var(--p2);
-      font-size: 14px;
-      margin-top: 6px;
-    }
-
-    .timer {
-      font-family: 'Bungee';
-      font-size: 34px;
-      color: var(--brick);
-    }
-
-    .timer.low {
-      color: #c0392b;
-    }
-
-    .submitted {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      justify-content: center;
-      margin-top: 10px;
-    }
-
-    .stag {
-      background: var(--p3);
-      color: #fff;
-      border: 2px solid var(--ink);
-      border-radius: 14px;
-      padding: 3px 10px;
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    /* answer entry (joiner phone) */
-    .reveal {
-      font-size: clamp(22px, 7vw, 38px);
-      font-weight: 700;
-      color: var(--p3);
-    }
-
-    .answerline {
-      background: #fff;
-      border: 4px solid var(--ink);
-      border-radius: 14px;
-      padding: 12px;
-      margin: 8px 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-weight: 700;
-    }
-
-    .answerline .who {
-      font-size: 14px;
-    }
-
-    .answerline .pts {
-      font-family: 'Bungee';
-      color: var(--brick);
-    }
-
-    .answerline.correct {
-      background: #d8f5cf;
-    }
-
-    .answerline.wrong {
-      background: #ffe0e0;
-    }
-
-    /* leaderboard */
-    .lb {
-      width: 100%;
-    }
-
-    .lbrow {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: #fff;
-      border: 4px solid var(--ink);
-      border-radius: 14px;
-      padding: 10px 14px;
-      margin: 7px 0;
-      font-weight: 700;
-    }
-
-    .lbrow .rank {
-      font-family: 'Bungee';
-      color: var(--brick);
-      width: 32px;
-      text-align: left;
-    }
-
-    .lbrow .nm {
-      flex: 1;
-      text-align: left;
-      padding-left: 8px;
-    }
-
-    .lbrow .sc {
-      font-family: 'Bungee';
-      color: var(--p2);
-    }
-
-    .lbrow.top {
-      background: var(--gold);
-    }
-
-    .lbrow .face {
-      width: 38px;
-      height: 38px;
-      border-radius: 50%;
-      border: 3px solid var(--ink);
-      overflow: hidden;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Bungee';
-      font-size: 16px;
-      background: var(--purple);
-      color: #fff;
-    }
-
-    .lbrow .face img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .big-emoji {
-      font-size: 46px;
-      margin: 6px;
-    }
-
-    .waiting {
-      font-weight: 700;
-      font-size: 16px;
-      opacity: .85;
-      margin-top: 10px;
-    }
-  </style>
+  /* leaderboard */
+  .lb{width:100%;}
+  .lbrow{display:flex;align-items:center;justify-content:space-between;background:#fff;border:4px solid var(--ink);
+    border-radius:14px;padding:10px 14px;margin:7px 0;font-weight:700;}
+  .lbrow .rank{font-family:'Bungee';color:var(--brick);width:32px;text-align:left;}
+  .lbrow .nm{flex:1;text-align:left;padding-left:8px;}
+  .lbrow .sc{font-family:'Bungee';color:var(--p2);}
+  .lbrow.top{background:var(--gold);}
+  .lbrow .face{width:38px;height:38px;border-radius:50%;border:3px solid var(--ink);overflow:hidden;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-family:'Bungee';font-size:16px;background:var(--purple);color:#fff;}
+  .lbrow .face img{width:100%;height:100%;object-fit:cover;}
+  .big-emoji{font-size:46px;margin:6px;}
+  .waiting{font-weight:700;font-size:16px;opacity:.85;margin-top:10px;}
+</style>
 </head>
-
 <body>
-  <div class="net" id="net"><span class="dot"></span><span id="netT">connecting…</span></div>
-  <div class="net" id="musicBtn" style="left:auto;right:8px;cursor:pointer;" onclick="toggleMusic()">🎵 Jazz: on</div>
-  <div id="app">
+<div class="net" id="net"><span class="dot"></span><span id="netT">connecting…</span></div>
+<div class="net" id="musicBtn" style="left:auto;right:8px;cursor:pointer;" onclick="toggleMusic()">🎵 Jazz: on</div>
+<div id="app">
 
-    <!-- LANDING -->
-    <div class="screen show" id="landing">
-      <div class="card">
-        <h1>Finish the Verse</h1>
-        <p class="sub">A Bible party game for your group 📖✨</p>
-        <p class="verse">"Your word is a lamp to my feet and a light to my path." — Psalm 119:105</p>
-        <button class="big gold" onclick="goHost()">Host a Game</button>
-        <button class="big alt" onclick="show('joinScreen')">Join a Game</button>
-        <p class="verse" style="margin-top:14px">One person hosts and shares the QR. Everyone else joins on their phone.
-        </p>
-      </div>
+  <!-- LANDING -->
+  <div class="screen show" id="landing">
+    <div class="card">
+      <h1>Finish the Verse</h1>
+      <p class="sub">A Bible party game for your group 📖✨</p>
+      <p class="verse">"Your word is a lamp to my feet and a light to my path." — Psalm 119:105</p>
+      <button class="big gold" onclick="goHost()">Host a Game</button>
+      <button class="big alt" onclick="show('joinScreen')">Join a Game</button>
+      <p class="verse" style="margin-top:14px">One person hosts and shares the QR. Everyone else joins on their phone.</p>
     </div>
-
-    <!-- NAME (joiner) -->
-    <div class="screen" id="nameScreen">
-      <div class="card">
-        <h1 style="font-size:clamp(22px,6vw,34px)">Your Name</h1>
-        <input class="txt" id="nameInput" placeholder="Type your name" maxlength="14">
-        <p class="err" id="nameErr"></p>
-        <button class="big gold" id="nameGo">Continue ▶</button>
-      </div>
-    </div>
-
-    <!-- JOIN CODE -->
-    <div class="screen" id="joinScreen">
-      <div class="card">
-        <h1 style="font-size:clamp(22px,6vw,34px)">Join a Game</h1>
-        <p class="verse">Enter the 4-letter code from the host screen:</p>
-        <input class="txt code" id="joinCode" placeholder="CODE" maxlength="4">
-        <p class="err" id="joinErr"></p>
-        <button class="big" onclick="goJoinName()">Next ▶</button>
-        <button class="big alt" onclick="show('landing')">Back</button>
-      </div>
-    </div>
-
-    <!-- LOBBY -->
-    <div class="screen" id="lobby">
-      <div class="card">
-        <h1 style="font-size:clamp(20px,5.5vw,30px)">Game Lobby</h1>
-        <div id="hostLobby">
-          <p class="verse">Friends scan to join:</p>
-          <div class="qrbox"><img id="qrImg" alt="QR"></div>
-          <div class="codebig" id="lobbyCode">----</div>
-        </div>
-        <div id="joinerLobby" style="display:none">
-          <p class="sub">You're in! Waiting for the host to start… 🙌</p>
-          <div class="codebig" id="lobbyCodeJ">----</div>
-        </div>
-        <div class="players" id="players"></div>
-        <button class="big gold" id="startBtn" style="display:none" onclick="hostStartGame()">Start Game ▶</button>
-      </div>
-    </div>
-
-    <!-- QUESTION (shared/host screen) -->
-    <div class="screen" id="qScreen">
-      <div class="card">
-        <div class="qbig" id="qProgress">Round 1</div>
-        <div class="timer" id="timer">15</div>
-        <div class="versebox" id="versebox"></div>
-        <div class="ref" id="qRef"></div>
-        <div class="submitted" id="submittedTags"></div>
-      </div>
-    </div>
-
-    <!-- ANSWER (joiner phone) -->
-    <div class="screen" id="aScreen">
-      <div class="card">
-        <div class="qbig" id="aProgress">Round 1</div>
-        <p class="sub" id="aPrompt">Finish the verse!</p>
-        <div class="versebox" id="aVersebox" style="font-size:clamp(16px,4.5vw,22px)"></div>
-        <input class="txt" id="answerInput" placeholder="Type the missing word(s)" maxlength="40">
-        <div id="answerOptions" style="display:none"></div>
-        <button class="big gold" id="answerGo" onclick="submitAnswer()">Submit ▶</button>
-        <div class="waiting" id="aWaiting" style="display:none">Answer locked in! ✓<br>Waiting for the round to end…
-        </div>
-      </div>
-    </div>
-
-    <!-- REVEAL -->
-    <div class="screen" id="revealScreen">
-      <div class="card">
-        <div class="qbig">The answer was…</div>
-        <div class="reveal" id="revealAns"></div>
-        <div class="ref" id="revealRef"></div>
-        <div id="revealList" style="margin-top:14px"></div>
-        <button class="big gold" id="nextBtn" style="display:none;margin-top:14px" onclick="hostNext()">Next ▶</button>
-        <div class="waiting" id="revealWait">Waiting for host…</div>
-      </div>
-    </div>
-
-    <!-- FINAL -->
-    <div class="screen" id="finalScreen">
-      <div class="card">
-        <div class="big-emoji">🏆</div>
-        <h1 style="font-size:clamp(22px,6vw,34px)">Final Scores</h1>
-        <div class="lb" id="finalLb"></div>
-        <div id="lovebox"
-          style="background:#fff;border:4px solid var(--ink);border-radius:16px;padding:16px;margin:16px 0;">
-          <div style="font-family:'Bungee';color:var(--brick);font-size:clamp(15px,4vw,20px);margin-bottom:6px;">God
-            loves you ❤️</div>
-          <div style="font-weight:600;font-size:clamp(13px,3.4vw,16px);line-height:1.5;color:var(--ink);" id="loveMsg">
-          </div>
-        </div>
-        <button class="big alt" id="selfieBtn" style="display:none" onclick="openEndCam()">📸 Add your photo!</button>
-        <button class="big" id="closingBtn" style="display:none;background:#1d1b3a;box-shadow:0 6px 0 #000"
-          onclick="hostClosing()">Show Closing Message 🌙</button>
-        <button class="big gold" id="playAgainBtn" style="display:none" onclick="location.href=location.origin">Play
-          Again ↺</button>
-      </div>
-    </div>
-
-    <!-- BLACK TYPEWRITER CLOSING SCREEN -->
-    <div id="closingScreen" style="display:none;position:fixed;inset:0;background:#000;z-index:70;
-    align-items:center;justify-content:center;padding:32px;">
-      <div id="typed" style="color:#fff;font-family:'Fredoka',sans-serif;font-weight:600;
-      font-size:clamp(20px,5.5vw,32px);line-height:1.6;text-align:center;max-width:680px;
-      white-space:pre-wrap;"><span id="typedText"></span><span id="caret"
-          style="display:inline-block;width:3px;height:1.1em;background:#fff;margin-left:2px;vertical-align:text-bottom;animation:blink 1s steps(1) infinite;"></span>
-      </div>
-    </div>
-
-    <!-- END-GAME CAMERA -->
-    <div id="endcam"
-      style="display:none;position:fixed;inset:0;background:rgba(10,12,24,.93);z-index:60;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:18px;">
-      <p style="color:#fff;font-weight:700;font-size:15px;">Smile for the leaderboard! 😄</p>
-      <video id="endvideo" autoplay playsinline
-        style="width:min(70vw,260px);height:min(70vw,260px);object-fit:cover;border-radius:50%;border:6px solid #fff;background:#000;transform:scaleX(-1);"></video>
-      <canvas id="endshot"
-        style="display:none;width:min(70vw,260px);height:min(70vw,260px);border-radius:50%;border:6px solid #fff;transform:scaleX(-1);"></canvas>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;" id="endcamRow">
-        <button class="big" style="max-width:160px" onclick="endSnap()">📸 Snap</button>
-        <button class="big alt" style="max-width:160px" onclick="closeEndCam()">Cancel</button>
-      </div>
-      <div style="display:none;gap:10px;flex-wrap:wrap;justify-content:center;" id="endConfirmRow">
-        <button class="big gold" style="max-width:160px" onclick="useEndShot()">✓ Use it</button>
-        <button class="big alt" style="max-width:160px" onclick="endRetake()">↺ Retake</button>
-      </div>
-    </div>
-
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
+  <!-- NAME (joiner) -->
+  <div class="screen" id="nameScreen">
+    <div class="card">
+      <h1 style="font-size:clamp(22px,6vw,34px)">Your Name</h1>
+      <input class="txt" id="nameInput" placeholder="Type your name" maxlength="14">
+      <p class="err" id="nameErr"></p>
+      <button class="big gold" id="nameGo">Continue ▶</button>
+    </div>
+  </div>
 
-    const socket = io({ transports: ['websocket', 'polling'] });
-    let myId = null, myRoom = null, isHost = false, myName = '';
-    let myPhotoSent = false;
-    let players = {};        // id -> {name}
-    let pendingCode = null;
+  <!-- JOIN CODE -->
+  <div class="screen" id="joinScreen">
+    <div class="card">
+      <h1 style="font-size:clamp(22px,6vw,34px)">Join a Game</h1>
+      <p class="verse">Enter the 4-letter code from the host screen:</p>
+      <input class="txt code" id="joinCode" placeholder="CODE" maxlength="4">
+      <p class="err" id="joinErr"></p>
+      <button class="big" onclick="goJoinName()">Next ▶</button>
+      <button class="big alt" onclick="show('landing')">Back</button>
+    </div>
+  </div>
 
-    const netEl = document.getElementById('net'), netT = document.getElementById('netT');
-    socket.on('connect', () => { myId = socket.id; netT.textContent = 'online'; netEl.classList.remove('bad'); });
-    socket.on('disconnect', () => { netT.textContent = 'reconnecting…'; netEl.classList.add('bad'); });
+  <!-- LOBBY -->
+  <div class="screen" id="lobby">
+    <div class="card">
+      <h1 style="font-size:clamp(20px,5.5vw,30px)">Game Lobby</h1>
+      <div id="hostLobby">
+        <p class="verse">Friends scan to join:</p>
+        <div class="qrbox"><img id="qrImg" alt="QR"></div>
+        <div class="codebig" id="lobbyCode">----</div>
+      </div>
+      <div id="joinerLobby" style="display:none">
+        <p class="sub">You're in! Waiting for the host to start… 🙌</p>
+        <div class="codebig" id="lobbyCodeJ">----</div>
+      </div>
+      <div class="players" id="players"></div>
+      <button class="big gold" id="startBtn" style="display:none" onclick="hostStartGame()">Start Game ▶</button>
+    </div>
+  </div>
 
-    function show(id) {
-      document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
-      document.getElementById(id).classList.add('show');
-    }
+  <!-- QUESTION (shared/host screen) -->
+  <div class="screen" id="qScreen">
+    <div class="card">
+      <div class="qbig" id="qProgress">Round 1</div>
+      <div class="timer" id="timer">15</div>
+      <div class="versebox" id="versebox"></div>
+      <div class="ref" id="qRef"></div>
+      <div class="submitted" id="submittedTags"></div>
+    </div>
+  </div>
+
+  <!-- ANSWER (joiner phone) -->
+  <div class="screen" id="aScreen">
+    <div class="card">
+      <div class="qbig" id="aProgress">Round 1</div>
+      <p class="sub" id="aPrompt">Finish the verse!</p>
+      <div class="versebox" id="aVersebox" style="font-size:clamp(16px,4.5vw,22px)"></div>
+      <input class="txt" id="answerInput" placeholder="Type the missing word(s)" maxlength="40">
+      <div id="answerOptions" style="display:none"></div>
+      <button class="big gold" id="answerGo" onclick="submitAnswer()">Submit ▶</button>
+      <div class="waiting" id="aWaiting" style="display:none">Answer locked in! ✓<br>Waiting for the round to end…</div>
+    </div>
+  </div>
+
+  <!-- REVEAL -->
+  <div class="screen" id="revealScreen">
+    <div class="card">
+      <div class="qbig">The answer was…</div>
+      <div class="reveal" id="revealAns"></div>
+      <div class="ref" id="revealRef"></div>
+      <div id="revealList" style="margin-top:14px"></div>
+      <button class="big gold" id="nextBtn" style="display:none;margin-top:14px" onclick="hostNext()">Next ▶</button>
+      <div class="waiting" id="revealWait">Waiting for host…</div>
+    </div>
+  </div>
+
+  <!-- FINAL -->
+  <div class="screen" id="finalScreen">
+    <div class="card">
+      <div class="big-emoji">🏆</div>
+      <h1 style="font-size:clamp(22px,6vw,34px)">Final Scores</h1>
+      <div class="lb" id="finalLb"></div>
+      <div id="lovebox" style="background:#fff;border:4px solid var(--ink);border-radius:16px;padding:16px;margin:16px 0;">
+        <div style="font-family:'Bungee';color:var(--brick);font-size:clamp(15px,4vw,20px);margin-bottom:6px;">God loves you ❤️</div>
+        <div style="font-weight:600;font-size:clamp(13px,3.4vw,16px);line-height:1.5;color:var(--ink);" id="loveMsg"></div>
+      </div>
+      <button class="big alt" id="selfieBtn" style="display:none" onclick="openEndCam()">📸 Add your photo!</button>
+      <button class="big" id="closingBtn" style="display:none;background:#1d1b3a;box-shadow:0 6px 0 #000" onclick="hostClosing()">Show Closing Message 🌙</button>
+      <button class="big gold" id="playAgainBtn" style="display:none" onclick="location.href=location.origin">Play Again ↺</button>
+    </div>
+  </div>
+
+  <!-- BLACK TYPEWRITER CLOSING SCREEN -->
+  <div id="closingScreen" style="display:none;position:fixed;inset:0;background:#000;z-index:70;
+    align-items:center;justify-content:center;padding:32px;">
+    <div id="typed" style="color:#fff;font-family:'Fredoka',sans-serif;font-weight:600;
+      font-size:clamp(20px,5.5vw,32px);line-height:1.6;text-align:center;max-width:680px;
+      white-space:pre-wrap;"><span id="typedText"></span><span id="caret" style="display:inline-block;width:3px;height:1.1em;background:#fff;margin-left:2px;vertical-align:text-bottom;animation:blink 1s steps(1) infinite;"></span></div>
+  </div>
+
+  <!-- END-GAME CAMERA -->
+  <div id="endcam" style="display:none;position:fixed;inset:0;background:rgba(10,12,24,.93);z-index:60;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:18px;">
+    <p style="color:#fff;font-weight:700;font-size:15px;">Smile for the leaderboard! 😄</p>
+    <video id="endvideo" autoplay playsinline style="width:min(70vw,260px);height:min(70vw,260px);object-fit:cover;border-radius:50%;border:6px solid #fff;background:#000;transform:scaleX(-1);"></video>
+    <canvas id="endshot" style="display:none;width:min(70vw,260px);height:min(70vw,260px);border-radius:50%;border:6px solid #fff;transform:scaleX(-1);"></canvas>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;" id="endcamRow">
+      <button class="big" style="max-width:160px" onclick="endSnap()">📸 Snap</button>
+      <button class="big alt" style="max-width:160px" onclick="closeEndCam()">Cancel</button>
+    </div>
+    <div style="display:none;gap:10px;flex-wrap:wrap;justify-content:center;" id="endConfirmRow">
+      <button class="big gold" style="max-width:160px" onclick="useEndShot()">✓ Use it</button>
+      <button class="big alt" style="max-width:160px" onclick="endRetake()">↺ Retake</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+
+const socket = io({ transports:['websocket','polling'] });
+let myId=null, myRoom=null, isHost=false, myName='';
+let myPhotoSent=false;
+let players={};        // id -> {name}
+let pendingCode=null;
+
+const netEl=document.getElementById('net'), netT=document.getElementById('netT');
+socket.on('connect',()=>{ myId=socket.id; netT.textContent='online'; netEl.classList.remove('bad'); });
+socket.on('disconnect',()=>{ netT.textContent='reconnecting…'; netEl.classList.add('bad'); });
+
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));
+  document.getElementById(id).classList.add('show'); }
 
 
-    const VERSES = [
-      // ---- The love of God ----
-      {
-        before: "For God so loved the", blank: "world", after: ", that he gave his only Son…",
-        accept: ["world"], ref: "John 3:16"
-      },
-      {
-        before: "We love because he first", blank: "loved", after: " us.",
-        accept: ["loved", "loved us"], ref: "1 John 4:19"
-      },
-      {
-        before: "God is", blank: "love", after: ". Whoever abides in love abides in God.",
-        accept: ["love"], ref: "1 John 4:16"
-      },
-      {
-        before: "See what kind of love the Father has given to us, that we should be called children of",
-        blank: "God", after: ".", accept: ["god"], ref: "1 John 3:1"
-      },
-      {
-        before: "Nothing can separate us from the love of", blank: "God", after: " in Christ Jesus our Lord.",
-        accept: ["god", "christ", "christ jesus"], ref: "Romans 8:39"
-      },
-      {
-        before: "The steadfast love of the Lord never", blank: "ends", after: "; his mercies are new every morning.",
-        accept: ["ends", "ceases"], ref: "Lamentations 3:22"
-      },
-      {
-        before: "As the Father has loved me, so have I loved you. Abide in my", blank: "love", after: ".",
-        accept: ["love"], ref: "John 15:9"
-      },
-      // ---- Purpose & calling ----
-      {
-        before: "For I know the plans I have for you, declares the Lord, plans for", blank: "welfare", after: " and not for evil, to give you a future and a hope.",
-        accept: ["welfare", "peace", "good"], ref: "Jeremiah 29:11"
-      },
-      {
-        before: "And we know that for those who love God all things work together for",
-        blank: "good", after: ".", accept: ["good"], ref: "Romans 8:28"
-      },
-      {
-        before: "For we are his workmanship, created in Christ Jesus for good",
-        blank: "works", after: ", which God prepared beforehand.", accept: ["works", "good works"], ref: "Ephesians 2:10"
-      },
-      {
-        before: "Whatever you do, work heartily, as for the Lord and not for",
-        blank: "men", after: ".", accept: ["men", "man", "people"], ref: "Colossians 3:23"
-      },
-      {
-        before: "Trust in the Lord with all your", blank: "heart", after: ", and lean not on your own understanding.",
-        accept: ["heart"], ref: "Proverbs 3:5"
-      },
-      {
-        before: "I can do all things through", blank: "Christ", after: " who strengthens me.",
-        accept: ["christ", "him", "god"], ref: "Philippians 4:13"
-      },
-      {
-        before: "Commit your work to the Lord, and your plans will be",
-        blank: "established", after: ".", accept: ["established"], ref: "Proverbs 16:3"
-      },
-      {
-        before: "Your word is a lamp to my feet and a", blank: "light", after: " to my path.",
-        accept: ["light"], ref: "Psalm 119:105"
-      },
-    ];
-    let roundOrder = [], roundIdx = 0;
-    const ROUND_SECONDS = 20;
+const VERSES = [
+  // ---- The love of God ----
+  { before:"For God so loved the", blank:"world", after:", that he gave his only Son…",
+    accept:["world"], ref:"John 3:16", emoji:"🌍❤️🎁👶" },
+  { before:"We love because he first", blank:"loved", after:" us.",
+    accept:["loved","loved us"], ref:"1 John 4:19", emoji:"👑❤️➡️🙋❤️" },
+  { before:"God is", blank:"love", after:". Whoever abides in love abides in God.",
+    accept:["love"], ref:"1 John 4:16", emoji:"��🟰❤️🏡" },
+  { before:"See what kind of love the Father has given to us, that we should be called children of",
+    blank:"God", after:".", accept:["god"], ref:"1 John 3:1", emoji:"👑❤️👶👧👦" },
+  { before:"Nothing can separate us from the love of", blank:"God", after:" in Christ Jesus our Lord.",
+    accept:["god","christ","christ jesus"], ref:"Romans 8:39", emoji:"🚫✂️👑❤️" },
+  { before:"The steadfast love of the Lord never", blank:"ends", after:"; his mercies are new every morning.",
+    accept:["ends","ceases"], ref:"Lamentations 3:22", emoji:"👑❤️♾️🌅🔄" },
+  { before:"As the Father has loved me, so have I loved you. Abide in my", blank:"love", after:".",
+    accept:["love"], ref:"John 15:9", emoji:"🍇🏠❤️" },
+  // ---- Purpose & calling ----
+  { before:"For I know the plans I have for you, declares the Lord, plans for", blank:"welfare", after:" and not for evil, to give you a future and a hope.",
+    accept:["welfare","peace","good"], ref:"Jeremiah 29:11", emoji:"👑📋🔮🌅✨" },
+  { before:"And we know that for those who love God all things work together for",
+    blank:"good", after:".", accept:["good"], ref:"Romans 8:28", emoji:"⚙️🔀👍✨" },
+  { before:"For we are his workmanship, created in Christ Jesus for good",
+    blank:"works", after:", which God prepared beforehand.", accept:["works","good works"], ref:"Ephesians 2:10", emoji:"🎨🛠️🧍✨" },
+  { before:"Whatever you do, work heartily, as for the Lord and not for",
+    blank:"men", after:".", accept:["men","man","people"], ref:"Colossians 3:23", emoji:"💪🛠️👑🙌" },
+  { before:"Trust in the Lord with all your", blank:"heart", after:", and lean not on your own understanding.",
+    accept:["heart"], ref:"Proverbs 3:5", emoji:"🤝👑💯❤️🚫🧠" },
+  { before:"I can do all things through", blank:"Christ", after:" who strengthens me.",
+    accept:["christ","him","god"], ref:"Philippians 4:13", emoji:"💪🌟✝️" },
+  { before:"Commit your work to the Lord, and your plans will be",
+    blank:"established", after:".", accept:["established"], ref:"Proverbs 16:3", emoji:"📝🤲👑✅" },
+  { before:"Your word is a lamp to my feet and a", blank:"light", after:" to my path.",
+    accept:["light"], ref:"Psalm 119:105", emoji:"📖🪔🦶✨" },
+];
+let roundOrder=[], roundIdx=0;
+const ROUND_SECONDS=20;
 
-    /* ---- helpers for the different round styles ---- */
-    // books used as decoys for "name the reference"
-    const BOOKS = ["John", "Psalm", "Romans", "Proverbs", "Genesis", "Matthew", "Philippians",
-      "1 John", "Ephesians", "Colossians", "Jeremiah", "Lamentations", "Isaiah", "Luke", "James"];
-    // extra words used as decoys for multiple choice
-    const DECOY_WORDS = ["world", "love", "light", "heart", "good", "God", "peace", "grace", "faith",
-      "hope", "truth", "life", "works", "glory", "mercy", "joy", "spirit", "word", "name", "way"];
-    const bookOf = ref => ref.replace(/\s+\d+:\d+.*$/, '').trim();   // "1 John 4:19" -> "1 John"
-    function shuffle(a) { return [...a].sort(() => Math.random() - 0.5); }
-    function pickDecoys(correct, pool, n) {
-      const opts = [correct];
-      for (const w of shuffle(pool)) {
-        if (opts.length >= n + 1) break;
-        if (w.toLowerCase() !== correct.toLowerCase() && !opts.some(o => o.toLowerCase() === w.toLowerCase())) opts.push(w);
+/* ---- helpers for the different round styles ---- */
+// books used as decoys for "name the reference"
+const BOOKS = ["John","Psalm","Romans","Proverbs","Genesis","Matthew","Philippians",
+  "1 John","Ephesians","Colossians","Jeremiah","Lamentations","Isaiah","Luke","James"];
+// extra words used as decoys for multiple choice
+const DECOY_WORDS = ["world","love","light","heart","good","God","peace","grace","faith",
+  "hope","truth","life","works","glory","mercy","joy","spirit","word","name","way"];
+const bookOf = ref => ref.replace(/\s+\d+:\d+.*$/,'').trim();   // "1 John 4:19" -> "1 John"
+function shuffle(a){ return [...a].sort(()=>Math.random()-0.5); }
+function pickDecoys(correct, pool, n){
+  const opts=[correct];
+  for(const w of shuffle(pool)){ if(opts.length>=n+1) break;
+    if(w.toLowerCase()!==correct.toLowerCase() && !opts.some(o=>o.toLowerCase()===w.toLowerCase())) opts.push(w); }
+  return shuffle(opts);
+}
+const MODES = ['blank','choice','reference','truefalse','scramble','emoji','memory','wager'];
+const wordsOf = s => s.replace(/[^\w\s']/g,'').replace(/\s+/g,' ').trim().split(' ');
+const fullOf = v => (v.before+' '+v.blank+' '+v.after).replace(/\s+/g,' ').trim();
+
+/* ---------------- HOST: create / lobby ---------------- */
+function goHost(){ isHost=true; flow='host'; show('nameScreen'); }
+function goJoinName(){ const c=document.getElementById('joinCode').value.toUpperCase().trim();
+  if(c.length!==4){ document.getElementById('joinErr').textContent='Enter the 4-letter code.'; return; }
+  pendingCode=c; isHost=false; flow='join'; show('nameScreen'); }
+let flow='host';
+document.getElementById('nameGo').onclick=()=>{
+  const n=document.getElementById('nameInput').value.trim();
+  if(!n){ document.getElementById('nameErr').textContent='Please enter a name.'; return; }
+  myName=n;
+  if(flow==='host') doCreate(); else doJoin();
+};
+function doCreate(){ socket.emit('createRoom',{name:myName},(res)=>{
+  if(!res||!res.ok){ document.getElementById('nameErr').textContent='Could not create room.'; return; }
+  myRoom=res.code; isHost=true; enterLobby(); showQR(); }); }
+function doJoin(){ socket.emit('joinRoom',{code:pendingCode,player:{name:myName}},(res)=>{
+  if(!res||!res.ok){ show('joinScreen'); document.getElementById('joinErr').textContent=res?res.error:'Join failed'; return; }
+  myRoom=res.code; isHost=false; enterLobby(); }); }
+
+function enterLobby(){ show('lobby');
+  document.getElementById('hostLobby').style.display=isHost?'block':'none';
+  document.getElementById('joinerLobby').style.display=isHost?'none':'block';
+  document.getElementById('startBtn').style.display=isHost?'inline-block':'none';
+  document.getElementById('lobbyCode').textContent=myRoom;
+  document.getElementById('lobbyCodeJ').textContent=myRoom; }
+async function showQR(){ const link=location.origin+'/?room='+myRoom;
+  try{ const r=await fetch('/qr?url='+encodeURIComponent(link)); const {png}=await r.json();
+    document.getElementById('qrImg').src=png; }catch(e){} }
+
+socket.on('playerList',({hostId,players:pl})=>{ players=pl;
+  const box=document.getElementById('players'); box.innerHTML='';
+  Object.entries(pl).forEach(([id,p])=>{ const d=document.createElement('div');
+    d.className='pchip'+(id===hostId?' host':''); d.textContent=p.name+(id===hostId?' 👑':'')+(id===myId?' (you)':'');
+    box.appendChild(d); }); });
+socket.on('roomClosed',({reason})=>{ alert(reason||'Room closed'); location.href=location.origin; });
+
+/* ---------------- ANSWER MATCHING ---------------- */
+function normalize(s){ return (s||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim(); }
+function isCorrect(answer, verse){
+  const a=normalize(answer);
+  return verse.accept.some(acc=>{ const n=normalize(acc); return a===n || (n.length>3 && a.includes(n)); });
+}
+
+/* ---------------- HOST: run rounds ---------------- */
+let scores={};            // id -> points
+let answersThisRound={};  // id -> {answer,timeLeft}
+let timerInt=null, timeLeft=0, flashTimer=null, flashTimerJ=null, curBet=0;
+
+function hostStartGame(){
+  if(!isHost) return;
+  // shuffle verses for variety
+  roundOrder = [...VERSES.keys()].sort(()=>Math.random()-0.5);
+  roundIdx=0; scores={};
+  Object.keys(players).forEach(id=>scores[id]=0);
+  startRound();
+}
+function startRound(){
+  answersThisRound={};
+  clearTimeout(flashTimer);
+  const v=VERSES[roundOrder[roundIdx]];
+  const full=fullOf(v), words=wordsOf(full);
+  let mode = MODES[Math.floor(Math.random()*MODES.length)];
+  if(mode==='memory' && words.length<5) mode='reference';
+  let q={ t:'question', idx:roundIdx, total:roundOrder.length, mode, ref:v.ref, seconds:ROUND_SECONDS };
+
+  if(mode==='blank'){
+    q.before=v.before; q.after=v.after;
+  } else if(mode==='choice'){
+    q.before=v.before; q.after=v.after;
+    q.options=pickDecoys(v.blank, DECOY_WORDS, 3);   // 4 options total
+    q.correct=v.blank;
+  } else if(mode==='reference'){
+    q.full = full;
+    q.options=pickDecoys(bookOf(v.ref), BOOKS, 3);
+    q.correct=bookOf(v.ref);
+  } else if(mode==='truefalse'){
+    // 50/50: show the real verse, or swap the blank word for a decoy
+    const real = Math.random()<0.5;
+    let shownWord=v.blank;
+    if(!real){ const d=pickDecoys(v.blank,DECOY_WORDS,1).find(w=>w.toLowerCase()!==v.blank.toLowerCase()); shownWord=d||v.blank; }
+    q.full = (v.before+' '+shownWord+' '+v.after).replace(/\s+/g,' ').trim();
+    q.options=['True','False'];
+    q.correct = real?'True':'False';
+  } else if(mode==='scramble'){
+    // rebuild the verse by tapping words in order
+    // long verses: scramble just the opening words so it stays playable
+    const sw = words.length>10 ? words.slice(0,8) : words;
+    q.words=shuffle(sw);
+    q.correct=sw.join(' ');
+    q.partial = words.length>10;
+  } else if(mode==='emoji'){
+    // guess which verse the emojis tell
+    q.emoji=v.emoji;
+    q.options=pickDecoys(v.ref, VERSES.map(x=>x.ref).filter(r=>r!==v.ref), 3);
+    q.correct=v.ref;
+  } else if(mode==='memory'){
+    // verse flashes, then: which word came after X?
+    const i=Math.floor(Math.random()*(words.length-1));
+    q.full=full; q.flash=5;
+    q.promptWord=words[i]; q.correct=words[i+1];
+    q.options=pickDecoys(words[i+1], words.filter((w,j)=>j!==i+1).concat(DECOY_WORDS), 3);
+  } else if(mode==='wager'){
+    // bet first, then answer — right doubles your bet, wrong loses it
+    q.before=v.before; q.after=v.after;
+    q.options=pickDecoys(v.blank, DECOY_WORDS, 3);
+    q.correct=v.blank;
+  }
+  curQ=q;
+  socket.emit('hostEvent', q);
+  showQuestionHost(q);
+  startTimer(ROUND_SECONDS);
+}
+let curQ=null;
+function startTimer(sec){
+  timeLeft=sec; updateTimer();
+  clearInterval(timerInt);
+  timerInt=setInterval(()=>{ timeLeft--; updateTimer();
+    if(timeLeft<=0){ clearInterval(timerInt); hostEndRound(); } },1000);
+}
+function updateTimer(){ const t=document.getElementById('timer'); if(t){ t.textContent=timeLeft;
+  t.classList.toggle('low',timeLeft<=5); } }
+
+/* host receives answers AND end-game photos from joiners via 'input' relay */
+let playerPhotos={};   // id -> dataURL (collected at end of game)
+socket.on('input',({id,state})=>{
+  if(!isHost) return;
+  if(state && state.t==='answer' && !answersThisRound[id]){
+    answersThisRound[id]={answer:state.answer, bet:state.bet||0, timeLeft:timeLeft};
+    renderSubmittedTags();
+    const joiners=Object.keys(players).filter(pid=>pid!==myId);
+    const answered=Object.keys(answersThisRound).length;
+    if(joiners.length>0 && answered>=joiners.length){ clearInterval(timerInt); setTimeout(hostEndRound,400); }
+  }
+  else if(state && state.t==='photo'){
+    playerPhotos[id]=state.photo;
+    // re-broadcast the leaderboard so every screen shows the new face
+    socket.emit('hostEvent',{t:'final',scores:scoreboard(),photos:playerPhotos});
+    showFinal(scoreboard(), playerPhotos);
+  }
+});
+function renderSubmittedTags(){ const box=document.getElementById('submittedTags'); if(!box) return;
+  box.innerHTML=''; Object.keys(answersThisRound).forEach(id=>{ const p=players[id]; if(!p) return;
+    const t=document.createElement('div'); t.className='stag'; t.textContent=p.name+' ✓'; box.appendChild(t); }); }
+
+function hostEndRound(){
+  const v=VERSES[roundOrder[roundIdx]];
+  const q=curQ;
+  const results=[];
+  Object.keys(players).forEach(id=>{
+    if(id===myId) return; // host is MC, not scored
+    const a=answersThisRound[id];
+    let correct=false, gain=0;
+    if(a){
+      const ans=a.answer;
+      if(q.mode==='blank'){ correct=isCorrect(ans, v); }
+      else { // every other mode compares against q.correct
+        correct = normalize(ans)===normalize(q.correct||'');
       }
-      return shuffle(opts);
-    }
-    const MODES = ['blank', 'choice', 'reference', 'truefalse'];
-
-    /* ---------------- HOST: create / lobby ---------------- */
-    function goHost() { isHost = true; flow = 'host'; show('nameScreen'); }
-    function goJoinName() {
-      const c = document.getElementById('joinCode').value.toUpperCase().trim();
-      if (c.length !== 4) { document.getElementById('joinErr').textContent = 'Enter the 4-letter code.'; return; }
-      pendingCode = c; isHost = false; flow = 'join'; show('nameScreen');
-    }
-    let flow = 'host';
-    document.getElementById('nameGo').onclick = () => {
-      const n = document.getElementById('nameInput').value.trim();
-      if (!n) { document.getElementById('nameErr').textContent = 'Please enter a name.'; return; }
-      myName = n;
-      if (flow === 'host') doCreate(); else doJoin();
-    };
-    function doCreate() {
-      socket.emit('createRoom', { name: myName }, (res) => {
-        if (!res || !res.ok) { document.getElementById('nameErr').textContent = 'Could not create room.'; return; }
-        myRoom = res.code; isHost = true; enterLobby(); showQR();
-      });
-    }
-    function doJoin() {
-      socket.emit('joinRoom', { code: pendingCode, player: { name: myName } }, (res) => {
-        if (!res || !res.ok) { show('joinScreen'); document.getElementById('joinErr').textContent = res ? res.error : 'Join failed'; return; }
-        myRoom = res.code; isHost = false; enterLobby();
-      });
-    }
-
-    function enterLobby() {
-      show('lobby');
-      document.getElementById('hostLobby').style.display = isHost ? 'block' : 'none';
-      document.getElementById('joinerLobby').style.display = isHost ? 'none' : 'block';
-      document.getElementById('startBtn').style.display = isHost ? 'inline-block' : 'none';
-      document.getElementById('lobbyCode').textContent = myRoom;
-      document.getElementById('lobbyCodeJ').textContent = myRoom;
-    }
-    async function showQR() {
-      const link = location.origin + '/?room=' + myRoom;
-      try {
-        const r = await fetch('/qr?url=' + encodeURIComponent(link)); const { png } = await r.json();
-        document.getElementById('qrImg').src = png;
-      } catch (e) { }
-    }
-
-    socket.on('playerList', ({ hostId, players: pl }) => {
-      players = pl;
-      const box = document.getElementById('players'); box.innerHTML = '';
-      Object.entries(pl).forEach(([id, p]) => {
-        const d = document.createElement('div');
-        d.className = 'pchip' + (id === hostId ? ' host' : ''); d.textContent = p.name + (id === hostId ? ' 👑' : '') + (id === myId ? ' (you)' : '');
-        box.appendChild(d);
-      });
-    });
-    socket.on('roomClosed', ({ reason }) => { alert(reason || 'Room closed'); location.href = location.origin; });
-
-    /* ---------------- ANSWER MATCHING ---------------- */
-    function normalize(s) { return (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
-    function isCorrect(answer, verse) {
-      const a = normalize(answer);
-      return verse.accept.some(acc => { const n = normalize(acc); return a === n || (n.length > 3 && a.includes(n)); });
-    }
-
-    /* ---------------- HOST: run rounds ---------------- */
-    let scores = {};            // id -> points
-    let answersThisRound = {};  // id -> {answer,timeLeft}
-    let timerInt = null, timeLeft = 0;
-
-    function hostStartGame() {
-      if (!isHost) return;
-      // shuffle verses for variety
-      roundOrder = [...VERSES.keys()].sort(() => Math.random() - 0.5);
-      roundIdx = 0; scores = {};
-      Object.keys(players).forEach(id => scores[id] = 0);
-      startRound();
-    }
-    function startRound() {
-      answersThisRound = {};
-      const v = VERSES[roundOrder[roundIdx]];
-      const mode = MODES[Math.floor(Math.random() * MODES.length)];
-      let q = { t: 'question', idx: roundIdx, total: roundOrder.length, mode, ref: v.ref, seconds: ROUND_SECONDS };
-
-      if (mode === 'blank') {
-        q.before = v.before; q.after = v.after;
-      } else if (mode === 'choice') {
-        q.before = v.before; q.after = v.after;
-        q.options = pickDecoys(v.blank, DECOY_WORDS, 3);   // 4 options total
-        q.correct = v.blank;
-      } else if (mode === 'reference') {
-        q.full = (v.before + ' ' + v.blank + ' ' + v.after).replace(/\s+/g, ' ').trim();
-        q.options = pickDecoys(bookOf(v.ref), BOOKS, 3);
-        q.correct = bookOf(v.ref);
-      } else if (mode === 'truefalse') {
-        // 50/50: show the real verse, or swap the blank word for a decoy
-        const real = Math.random() < 0.5;
-        let shownWord = v.blank;
-        if (!real) { const d = pickDecoys(v.blank, DECOY_WORDS, 1).find(w => w.toLowerCase() !== v.blank.toLowerCase()); shownWord = d || v.blank; }
-        q.full = (v.before + ' ' + shownWord + ' ' + v.after).replace(/\s+/g, ' ').trim();
-        q.options = ['True', 'False'];
-        q.correct = real ? 'True' : 'False';
-      }
-      curQ = q;
-      socket.emit('hostEvent', q);
-      showQuestionHost(q);
-      startTimer(ROUND_SECONDS);
-    }
-    let curQ = null;
-    function startTimer(sec) {
-      timeLeft = sec; updateTimer();
-      clearInterval(timerInt);
-      timerInt = setInterval(() => {
-        timeLeft--; updateTimer();
-        if (timeLeft <= 0) { clearInterval(timerInt); hostEndRound(); }
-      }, 1000);
-    }
-    function updateTimer() {
-      const t = document.getElementById('timer'); if (t) {
-        t.textContent = timeLeft;
-        t.classList.toggle('low', timeLeft <= 5);
-      }
-    }
-
-    /* host receives answers AND end-game photos from joiners via 'input' relay */
-    let playerPhotos = {};   // id -> dataURL (collected at end of game)
-    socket.on('input', ({ id, state }) => {
-      if (!isHost) return;
-      if (state && state.t === 'answer' && !answersThisRound[id]) {
-        answersThisRound[id] = { answer: state.answer, timeLeft: timeLeft };
-        renderSubmittedTags();
-        const joiners = Object.keys(players).filter(pid => pid !== myId);
-        const answered = Object.keys(answersThisRound).length;
-        if (joiners.length > 0 && answered >= joiners.length) { clearInterval(timerInt); setTimeout(hostEndRound, 400); }
-      }
-      else if (state && state.t === 'photo') {
-        playerPhotos[id] = state.photo;
-        // re-broadcast the leaderboard so every screen shows the new face
-        socket.emit('hostEvent', { t: 'final', scores: scoreboard(), photos: playerPhotos });
-        showFinal(scoreboard(), playerPhotos);
-      }
-    });
-    function renderSubmittedTags() {
-      const box = document.getElementById('submittedTags'); if (!box) return;
-      box.innerHTML = ''; Object.keys(answersThisRound).forEach(id => {
-        const p = players[id]; if (!p) return;
-        const t = document.createElement('div'); t.className = 'stag'; t.textContent = p.name + ' ✓'; box.appendChild(t);
-      });
-    }
-
-    function hostEndRound() {
-      const v = VERSES[roundOrder[roundIdx]];
-      const q = curQ;
-      const results = [];
-      Object.keys(players).forEach(id => {
-        if (id === myId) return; // host is MC, not scored
-        const a = answersThisRound[id];
-        let correct = false, gain = 0;
-        if (a) {
-          const ans = a.answer;
-          if (q.mode === 'blank') { correct = isCorrect(ans, v); }
-          else { // choice / reference / truefalse all compare against q.correct
-            correct = normalize(ans) === normalize(q.correct);
-          }
-          if (correct) {
-            // base 1000 + a bigger speed bonus (up to +500) so being fast really matters
-            gain = 1000 + Math.round((a.timeLeft / ROUND_SECONDS) * 500);
-          }
-        }
-        scores[id] = (scores[id] || 0) + gain;
-        results.push({ id, name: players[id].name, answer: a ? a.answer : '(no answer)', correct, gain });
-      });
-      // show fastest correct first
-      results.sort((x, y) => (y.correct - x.correct) || (y.gain - x.gain));
-      // the "answer" shown on reveal depends on mode
-      const shownAnswer = (q.mode === 'blank' || q.mode === 'choice') ? v.blank
-        : (q.mode === 'reference') ? bookOf(v.ref)
-          : q.correct; // truefalse
-      const reveal = {
-        t: 'reveal', mode: q.mode, answer: shownAnswer, ref: v.ref, results,
-        scores: scoreboard(), last: (roundIdx >= roundOrder.length - 1)
-      };
-      socket.emit('hostEvent', reveal);
-      showRevealHost(reveal);
-    }
-    function scoreboard() {
-      return Object.keys(scores).map(id => ({ id, name: players[id] ? players[id].name : '?', score: scores[id] }))
-        .sort((a, b) => b.score - a.score);
-    }
-
-    function hostNext() {
-      if (roundIdx >= roundOrder.length - 1) { socket.emit('hostEvent', { t: 'final', scores: scoreboard(), photos: playerPhotos }); showFinal(scoreboard(), playerPhotos); return; }
-      roundIdx++; startRound();
-    }
-
-    /* ---------------- HOST screen renders ---------------- */
-    function showQuestionHost(p) {
-      show('qScreen');
-      const modeLabel = { blank: 'Fill the blank', choice: 'Pick the word', reference: 'Which book?', truefalse: 'True or false?' }[p.mode];
-      document.getElementById('qProgress').textContent = 'Round ' + (p.idx + 1) + ' of ' + p.total + ' · ' + modeLabel;
-      const vb = document.getElementById('versebox');
-      if (p.mode === 'blank' || p.mode === 'choice') {
-        vb.innerHTML = esc(p.before) + ' <span class="blank"></span> ' + esc(p.after);
-      } else { // reference / truefalse show the full verse
-        vb.innerHTML = '“' + esc(p.full) + '”';
-      }
-      // show the options on the shared screen too (so the room can read along)
-      document.getElementById('qRef').textContent = (p.mode === 'reference') ? 'Which book is this from?'
-        : (p.mode === 'truefalse') ? 'Is this verse quoted correctly?'
-          : (p.mode === 'choice') ? ('Options: ' + p.options.join(' · ')) : p.ref;
-      document.getElementById('submittedTags').innerHTML = '';
-    }
-    function showRevealHost(r) {
-      show('revealScreen');
-      document.getElementById('revealAns').textContent = r.answer;
-      document.getElementById('revealRef').textContent = r.ref;
-      const list = document.getElementById('revealList'); list.innerHTML = '';
-      r.results.forEach(res => {
-        const d = document.createElement('div'); d.className = 'answerline ' + (res.correct ? 'correct' : 'wrong');
-        d.innerHTML = '<span class="who">' + esc(res.name) + ': "' + esc(res.answer) + '"</span><span class="pts">' + (res.correct ? '+' + res.gain : '✗') + '</span>';
-        list.appendChild(d);
-      });
-      document.getElementById('nextBtn').style.display = 'inline-block';
-      document.getElementById('nextBtn').textContent = r.last ? 'See Final Scores ▶' : 'Next Round ▶';
-      document.getElementById('revealWait').style.display = 'none';
-    }
-    const LOVE_MESSAGES = [
-      "No matter your score, you are deeply loved by God — more than you can imagine.",
-      "God's love for you isn't based on winning. You are His, and He delights in you.",
-      "Whatever you carry tonight, remember: nothing can separate you from God's love.",
-      "You were made on purpose, for a purpose. God loves you exactly as you are."
-    ];
-    function showFinal(sb, photos) {
-      photos = photos || {};
-      show('finalScreen');
-      const box = document.getElementById('finalLb'); box.innerHTML = '';
-      sb.forEach((row, i) => {
-        const d = document.createElement('div'); d.className = 'lbrow' + (i === 0 ? ' top' : '');
-        const face = document.createElement('div'); face.className = 'face';
-        if (photos[row.id]) { const im = new Image(); im.src = photos[row.id]; face.appendChild(im); }
-        else { face.textContent = (row.name || '?')[0].toUpperCase(); }
-        const rank = document.createElement('span'); rank.className = 'rank'; rank.textContent = (i + 1);
-        const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = row.name + (i === 0 ? ' 🏆' : '');
-        const sc = document.createElement('span'); sc.className = 'sc'; sc.textContent = row.score;
-        d.appendChild(rank); d.appendChild(face); d.appendChild(nm); d.appendChild(sc);
-        box.appendChild(d);
-      });
-      // the love message (stable per session so it doesn't flicker on photo updates)
-      if (!window._loveMsg) window._loveMsg = LOVE_MESSAGES[Math.floor(Math.random() * LOVE_MESSAGES.length)];
-      document.getElementById('loveMsg').textContent = window._loveMsg;
-      // host gets play-again + the closing message trigger; joiners get the selfie button (once)
-      if (isHost) {
-        document.getElementById('playAgainBtn').style.display = 'inline-block';
-        document.getElementById('closingBtn').style.display = 'inline-block';
-      }
-      else if (!myPhotoSent) { document.getElementById('selfieBtn').style.display = 'inline-block'; }
-    }
-
-    /* ---------------- CLOSING MESSAGE (black screen, typed out) ---------------- */
-    const CLOSING_MESSAGE =
-      "Thank you for joining and playing tonight.\n\n" +
-      "Whatever you scored, remember this CYN:\n" +
-      "God loves you completely, and without any condition.\n\n" +
-      "You are seen. You are known. You belong to Him.\n\n" +
-      "Jesus loves you ❤️ ";
-
-    function hostClosing() {
-      if (!isHost) return;
-      socket.emit('hostEvent', { t: 'closing', message: CLOSING_MESSAGE });
-      showClosing(CLOSING_MESSAGE);
-    }
-
-    let typeTimer = null;
-    function showClosing(message) {
-      // fade music down gently for the reflective moment
-      try { if (typeof Tone !== 'undefined' && Tone.Destination) Tone.Destination.volume.rampTo(-30, 2); } catch (e) { }
-      const screen = document.getElementById('closingScreen');
-      screen.style.display = 'flex';
-      const out = document.getElementById('typedText');
-      out.textContent = '';
-      let i = 0;
-      clearInterval(typeTimer);
-      typeTimer = setInterval(() => {                 // type one character at a time, left to right
-        if (i >= message.length) { clearInterval(typeTimer); return; }
-        out.textContent += message.charAt(i);
-        i++;
-      }, 55);   // ~55ms per character — lower = faster typing
-    }
-
-    /* ---------------- JOINER side ---------------- */
-    let answered = false;
-    socket.on('hostEvent', (evt) => {
-      if (isHost) return;
-      if (evt.t === 'question') { answered = false; showQuestionJoiner(evt); }
-      else if (evt.t === 'reveal') { showRevealJoiner(evt); }
-      else if (evt.t === 'final') { showFinal(evt.scores, evt.photos || {}); }
-      else if (evt.t === 'closing') { showClosing(evt.message); }
-    });
-    function showQuestionJoiner(p) {
-      show('aScreen');
-      const modeLabel = { blank: 'Finish the verse!', choice: 'Tap the missing word', reference: 'Which book is this from?', truefalse: 'Is this verse correct?' }[p.mode];
-      document.getElementById('aProgress').textContent = 'Round ' + (p.idx + 1) + ' of ' + p.total;
-      document.getElementById('aPrompt').textContent = modeLabel;
-      const vb = document.getElementById('aVersebox');
-      if (p.mode === 'blank' || p.mode === 'choice') {
-        vb.innerHTML = esc(p.before) + ' <span class="blank"></span> ' + esc(p.after);
-      } else {
-        vb.innerHTML = '“' + esc(p.full) + '”';
-      }
-      const input = document.getElementById('answerInput');
-      const optBox = document.getElementById('answerOptions');
-      const goBtn = document.getElementById('answerGo');
-      optBox.innerHTML = '';
-      document.getElementById('aWaiting').style.display = 'none';
-
-      if (p.mode === 'blank') {
-        // typed answer
-        input.style.display = ''; input.value = ''; input.disabled = false;
-        optBox.style.display = 'none';
-        goBtn.style.display = 'inline-block'; goBtn.disabled = false;
-        setTimeout(() => input.focus(), 100);
-      } else {
-        // tappable options — submit instantly on tap
-        input.style.display = 'none';
-        goBtn.style.display = 'none';
-        optBox.style.display = 'block';
-        p.options.forEach(opt => {
-          const b = document.createElement('button');
-          b.className = 'big ' + (p.mode === 'truefalse' ? (opt === 'True' ? '' : 'alt') : 'alt');
-          b.textContent = opt;
-          b.onclick = () => { if (answered) return; submitChoice(opt); };
-          optBox.appendChild(b);
-        });
+      if(q.mode==='wager'){
+        // right = win double your bet, wrong = lose the bet
+        const bet=Math.max(0,Math.min(500,a.bet||0));
+        gain = correct ? bet*2 : -bet;
+      } else if(correct){
+        // base 1000 + a bigger speed bonus (up to +500) so being fast really matters
+        gain = 1000 + Math.round((a.timeLeft/ROUND_SECONDS)*500);
       }
     }
-    function submitAnswer() {
-      if (answered) return; answered = true;
-      const ans = document.getElementById('answerInput').value.trim();
-      socket.emit('input', { t: 'answer', answer: ans });
-      lockJoinerInput();
+    scores[id]=Math.max(0,(scores[id]||0)+gain);   // never drop below zero
+    results.push({id, name:players[id].name, answer:a?a.answer:'(no answer)', correct, gain});
+  });
+  // show fastest correct first
+  results.sort((x,y)=>(y.correct-x.correct)||(y.gain-x.gain));
+  // the "answer" shown on reveal depends on mode
+  const shownAnswer = (q.mode==='blank'||q.mode==='choice'||q.mode==='wager') ? v.blank
+                    : (q.mode==='reference') ? bookOf(v.ref)
+                    : q.correct; // truefalse / scramble / emoji / memory
+  const reveal={ t:'reveal', mode:q.mode, answer:shownAnswer, ref:v.ref, results,
+    scores:scoreboard(), last:(roundIdx>=roundOrder.length-1) };
+  socket.emit('hostEvent', reveal);
+  showRevealHost(reveal);
+}
+function scoreboard(){ return Object.keys(scores).map(id=>({id,name:players[id]?players[id].name:'?',score:scores[id]}))
+  .sort((a,b)=>b.score-a.score); }
+
+function hostNext(){
+  if(roundIdx>=roundOrder.length-1){ socket.emit('hostEvent',{t:'final',scores:scoreboard(),photos:playerPhotos}); showFinal(scoreboard(),playerPhotos); return; }
+  roundIdx++; startRound();
+}
+
+/* ---------------- HOST screen renders ---------------- */
+function showQuestionHost(p){ show('qScreen');
+  clearTimeout(flashTimer);
+  const modeLabel={blank:'Fill the blank',choice:'Pick the word',reference:'Which book?',truefalse:'True or false?',
+    scramble:'Unscramble the verse',emoji:'Emoji verse',memory:'Memory flash',wager:'🎲 Wager round'}[p.mode];
+  document.getElementById('qProgress').textContent='Round '+(p.idx+1)+' of '+p.total+' · '+modeLabel;
+  const vb=document.getElementById('versebox');
+  if(p.mode==='blank'||p.mode==='choice'||p.mode==='wager'){
+    vb.innerHTML = esc(p.before)+' <span class="blank"></span> '+esc(p.after);
+  } else if(p.mode==='scramble'){
+    vb.innerHTML = p.words.map(w=>'<span style="display:inline-block;background:#f3e8ff;border:2px solid var(--ink);border-radius:10px;padding:4px 10px;margin:3px;font-size:18px;">'+esc(w)+'</span>').join('');
+  } else if(p.mode==='emoji'){
+    vb.innerHTML = '<span style="font-size:clamp(40px,12vw,64px);letter-spacing:6px;">'+esc(p.emoji)+'</span>';
+  } else if(p.mode==='memory'){
+    vb.innerHTML = '“'+esc(p.full)+'”';
+    flashTimer=setTimeout(()=>{ vb.innerHTML='What word came right after “'+esc(p.promptWord)+'” ?'; },(p.flash||5)*1000);
+  } else { // reference / truefalse show the full verse
+    vb.innerHTML = '“'+esc(p.full)+'”';
+  }
+  // show the options on the shared screen too (so the room can read along)
+  document.getElementById('qRef').textContent =
+      (p.mode==='reference') ? 'Which book is this from?'
+    : (p.mode==='truefalse') ? 'Is this verse quoted correctly?'
+    : (p.mode==='choice') ? ('Options: '+p.options.join(' · '))
+    : (p.mode==='scramble') ? 'Put the words in order on your phone!'
+    : (p.mode==='emoji') ? ('Which verse is this? '+p.options.join(' · '))
+    : (p.mode==='memory') ? 'Memorize it — question coming…'
+    : (p.mode==='wager') ? ('Bet first, then answer! Options: '+p.options.join(' · '))
+    : p.ref;
+  document.getElementById('submittedTags').innerHTML=''; }
+function showRevealHost(r){ show('revealScreen');
+  clearTimeout(flashTimer);
+  document.getElementById('revealAns').textContent=r.answer;
+  document.getElementById('revealRef').textContent=r.ref;
+  const list=document.getElementById('revealList'); list.innerHTML='';
+  r.results.forEach(res=>{ const d=document.createElement('div'); d.className='answerline '+(res.correct?'correct':'wrong');
+    d.innerHTML='<span class="who">'+esc(res.name)+': "'+esc(res.answer)+'"</span><span class="pts">'+(res.correct?'+'+res.gain:(res.gain<0?res.gain:'✗'))+'</span>';
+    list.appendChild(d); });
+  document.getElementById('nextBtn').style.display='inline-block';
+  document.getElementById('nextBtn').textContent = r.last?'See Final Scores ▶':'Next Round ▶';
+  document.getElementById('revealWait').style.display='none'; }
+const LOVE_MESSAGES = [
+  "No matter your score, you are deeply loved by God — more than you can imagine.",
+  "God's love for you isn't based on winning. You are His, and He delights in you.",
+  "Whatever you carry tonight, remember: nothing can separate you from God's love.",
+  "You were made on purpose, for a purpose. God loves you exactly as you are."
+];
+function showFinal(sb, photos){
+  photos = photos || {};
+  show('finalScreen');
+  const box=document.getElementById('finalLb'); box.innerHTML='';
+  sb.forEach((row,i)=>{ const d=document.createElement('div'); d.className='lbrow'+(i===0?' top':'');
+    const face=document.createElement('div'); face.className='face';
+    if(photos[row.id]){ const im=new Image(); im.src=photos[row.id]; face.appendChild(im); }
+    else { face.textContent=(row.name||'?')[0].toUpperCase(); }
+    const rank=document.createElement('span'); rank.className='rank'; rank.textContent=(i+1);
+    const nm=document.createElement('span'); nm.className='nm'; nm.textContent=row.name+(i===0?' 🏆':'');
+    const sc=document.createElement('span'); sc.className='sc'; sc.textContent=row.score;
+    d.appendChild(rank); d.appendChild(face); d.appendChild(nm); d.appendChild(sc);
+    box.appendChild(d); });
+  // the love message (stable per session so it doesn't flicker on photo updates)
+  if(!window._loveMsg) window._loveMsg = LOVE_MESSAGES[Math.floor(Math.random()*LOVE_MESSAGES.length)];
+  document.getElementById('loveMsg').textContent = window._loveMsg;
+  // host gets play-again + the closing message trigger; joiners get the selfie button (once)
+  if(isHost){ document.getElementById('playAgainBtn').style.display='inline-block';
+    document.getElementById('closingBtn').style.display='inline-block'; }
+  else if(!myPhotoSent){ document.getElementById('selfieBtn').style.display='inline-block'; }
+}
+
+/* ---------------- CLOSING MESSAGE (black screen, typed out) ---------------- */
+const CLOSING_MESSAGE =
+  "Thank you for joining and playing tonight.\n\n"+
+  "Whatever you scored, remember this CYN:\n"+
+  "God loves you completely, and without any condition.\n\n"+
+  "You are seen. You are known. You belong to Him.\n\n"+
+  "Jesus loves you ❤️ ";
+
+function hostClosing(){
+  if(!isHost) return;
+  socket.emit('hostEvent',{ t:'closing', message: CLOSING_MESSAGE });
+  showClosing(CLOSING_MESSAGE);
+}
+
+let typeTimer=null;
+function showClosing(message){
+  // fade music down gently for the reflective moment
+  try{ if(typeof Tone!=='undefined' && Tone.Destination) Tone.Destination.volume.rampTo(-30, 2); }catch(e){}
+  const screen=document.getElementById('closingScreen');
+  screen.style.display='flex';
+  const out=document.getElementById('typedText');
+  out.textContent='';
+  let i=0;
+  clearInterval(typeTimer);
+  typeTimer=setInterval(()=>{                 // type one character at a time, left to right
+    if(i>=message.length){ clearInterval(typeTimer); return; }
+    out.textContent += message.charAt(i);
+    i++;
+  }, 55);   // ~55ms per character — lower = faster typing
+}
+
+/* ---------------- JOINER side ---------------- */
+let answered=false;
+socket.on('hostEvent',(evt)=>{
+  if(isHost) return;
+  if(evt.t==='question'){ answered=false; showQuestionJoiner(evt); }
+  else if(evt.t==='reveal'){ showRevealJoiner(evt); }
+  else if(evt.t==='final'){ showFinal(evt.scores, evt.photos||{}); }
+  else if(evt.t==='closing'){ showClosing(evt.message); }
+});
+function showQuestionJoiner(p){ show('aScreen');
+  clearTimeout(flashTimerJ);
+  const modeLabel={blank:'Finish the verse!',choice:'Tap the missing word',reference:'Which book is this from?',truefalse:'Is this verse correct?',
+    scramble:'Tap the words in the right order!',emoji:'Which verse do these emojis tell?',memory:'Memorize the verse… 👀',wager:'🎲 Wager Round — place your bet!'}[p.mode];
+  document.getElementById('aProgress').textContent='Round '+(p.idx+1)+' of '+p.total;
+  document.getElementById('aPrompt').textContent=modeLabel;
+  const vb=document.getElementById('aVersebox');
+  if(p.mode==='blank'||p.mode==='choice'||p.mode==='wager'){
+    vb.innerHTML = esc(p.before)+' <span class="blank"></span> '+esc(p.after);
+  } else if(p.mode==='scramble'){
+    vb.innerHTML = (p.partial?'Rebuild the START of the verse 👇':'Rebuild the verse 👇')+'<div class="ref">'+esc(p.ref)+'</div>';
+  } else if(p.mode==='emoji'){
+    vb.innerHTML = '<span style="font-size:clamp(34px,11vw,54px);letter-spacing:4px;">'+esc(p.emoji)+'</span>';
+  } else {
+    vb.innerHTML = '“'+esc(p.full)+'”';
+  }
+  const input=document.getElementById('answerInput');
+  const optBox=document.getElementById('answerOptions');
+  const goBtn=document.getElementById('answerGo');
+  optBox.innerHTML='';
+  document.getElementById('aWaiting').style.display='none';
+  curBet=0;
+
+  if(p.mode==='blank'){
+    // typed answer
+    input.style.display=''; input.value=''; input.disabled=false;
+    optBox.style.display='none';
+    goBtn.style.display='inline-block'; goBtn.disabled=false;
+    setTimeout(()=>input.focus(),100);
+  } else if(p.mode==='scramble'){
+    input.style.display='none'; goBtn.style.display='none'; optBox.style.display='block';
+    buildScrambleUI(p.words, optBox);
+  } else if(p.mode==='memory'){
+    input.style.display='none'; goBtn.style.display='none'; optBox.style.display='block';
+    optBox.innerHTML='<div class="waiting">Look closely… it disappears soon! 👀</div>';
+    flashTimerJ=setTimeout(()=>{
+      vb.innerHTML='What word came right after “'+esc(p.promptWord)+'” ?';
+      renderOptions(p.options, optBox, p.mode);
+    }, (p.flash||5)*1000);
+  } else if(p.mode==='wager'){
+    input.style.display='none'; goBtn.style.display='none'; optBox.style.display='block';
+    renderBets(p, optBox);
+  } else {
+    // choice / reference / truefalse / emoji — tappable options, submit instantly on tap
+    input.style.display='none'; goBtn.style.display='none'; optBox.style.display='block';
+    renderOptions(p.options, optBox, p.mode);
+  }
+}
+function renderOptions(options, optBox, mode){
+  optBox.innerHTML='';
+  options.forEach(opt=>{
+    const b=document.createElement('button');
+    b.className='big '+(mode==='truefalse'?(opt==='True'?'':'alt'):'alt');
+    b.textContent=opt;
+    b.onclick=()=>{ if(answered) return; submitChoice(opt); };
+    optBox.appendChild(b);
+  });
+}
+function renderBets(p, optBox){
+  optBox.innerHTML='';
+  [['🙂 Safe — bet 100',100],['😎 Bold — bet 300',300],['🔥 All-in — bet 500',500]].forEach(([label,amt])=>{
+    const b=document.createElement('button'); b.className='big alt'; b.textContent=label;
+    b.onclick=()=>{ if(answered) return; curBet=amt;
+      document.getElementById('aPrompt').textContent='You bet '+amt+'! Right = +'+(amt*2)+', wrong = −'+amt;
+      renderOptions(p.options, optBox, p.mode); };
+    optBox.appendChild(b);
+  });
+}
+function buildScrambleUI(words, optBox){
+  optBox.innerHTML='';
+  const asm=document.createElement('div');
+  asm.style.cssText='min-height:46px;background:#fff;border:3px dashed var(--ink);border-radius:12px;padding:8px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;';
+  const pool=document.createElement('div');
+  pool.style.cssText='display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
+  optBox.appendChild(asm); optBox.appendChild(pool);
+  const chosen=[], remaining=[...words];
+  const mkChip=(w,inAsm)=>{ const b=document.createElement('button'); b.textContent=w;
+    b.style.cssText='font-family:Fredoka,sans-serif;font-weight:700;font-size:15px;border:3px solid var(--ink);border-radius:10px;padding:6px 10px;cursor:pointer;background:'+(inAsm?'#ffd23f':'#fff')+';';
+    return b; };
+  function render(){
+    asm.innerHTML=''; pool.innerHTML='';
+    if(chosen.length===0){ const hint=document.createElement('span');
+      hint.style.cssText='opacity:.5;font-weight:700;font-size:13px;'; hint.textContent='tap words below…'; asm.appendChild(hint); }
+    chosen.forEach((w,i)=>{ const c=mkChip(w,true);
+      c.onclick=()=>{ if(answered)return; chosen.splice(i,1); remaining.push(w); render(); }; asm.appendChild(c); });
+    remaining.forEach((w,i)=>{ const c=mkChip(w,false);
+      c.onclick=()=>{ if(answered)return; chosen.push(w); remaining.splice(i,1); render(); }; pool.appendChild(c); });
+    if(remaining.length===0 && chosen.length>0){
+      const go=document.createElement('button'); go.className='big gold'; go.textContent='Submit ✓';
+      go.onclick=()=>{ if(answered)return; submitChoice(chosen.join(' ')); };
+      pool.appendChild(go);
     }
-    function submitChoice(opt) {
-      if (answered) return; answered = true;
-      socket.emit('input', { t: 'answer', answer: opt });
-      lockJoinerInput();
-    }
-    function lockJoinerInput() {
-      document.getElementById('answerInput').disabled = true;
-      document.getElementById('answerGo').style.display = 'none';
-      document.getElementById('answerOptions').style.display = 'none';
-      document.getElementById('aWaiting').style.display = 'block';
-    }
-    function showRevealJoiner(r) {
-      show('revealScreen');
-      document.getElementById('revealAns').textContent = r.answer;
-      document.getElementById('revealRef').textContent = r.ref;
-      const mine = r.results.find(x => x.id === myId);
-      const list = document.getElementById('revealList'); list.innerHTML = '';
-      if (mine) {
-        const d = document.createElement('div'); d.className = 'answerline ' + (mine.correct ? 'correct' : 'wrong');
-        d.innerHTML = '<span class="who">You said: "' + esc(mine.answer) + '"</span><span class="pts">' + (mine.correct ? '+' + mine.gain : '✗') + '</span>';
-        list.appendChild(d);
-      }
-      // mini scoreboard
-      r.scores.slice(0, 5).forEach((row, i) => {
-        const d = document.createElement('div'); d.className = 'answerline';
-        d.innerHTML = '<span class="who">' + (i + 1) + '. ' + esc(row.name) + '</span><span class="pts">' + row.score + '</span>'; list.appendChild(d);
-      });
-      document.getElementById('nextBtn').style.display = 'none';
-      document.getElementById('revealWait').style.display = 'block';
-    }
+  }
+  render();
+}
+function submitAnswer(){
+  if(answered) return; answered=true;
+  const ans=document.getElementById('answerInput').value.trim();
+  socket.emit('input',{ t:'answer', answer:ans });
+  lockJoinerInput();
+}
+function submitChoice(opt){
+  if(answered) return; answered=true;
+  socket.emit('input',{ t:'answer', answer:opt, bet:curBet });
+  lockJoinerInput();
+}
+function lockJoinerInput(){
+  document.getElementById('answerInput').disabled=true;
+  document.getElementById('answerGo').style.display='none';
+  document.getElementById('answerOptions').style.display='none';
+  document.getElementById('aWaiting').style.display='block';
+}
+function showRevealJoiner(r){ show('revealScreen');
+  clearTimeout(flashTimerJ);
+  document.getElementById('revealAns').textContent=r.answer;
+  document.getElementById('revealRef').textContent=r.ref;
+  const mine=r.results.find(x=>x.id===myId);
+  const list=document.getElementById('revealList'); list.innerHTML='';
+  if(mine){ const d=document.createElement('div'); d.className='answerline '+(mine.correct?'correct':'wrong');
+    d.innerHTML='<span class="who">You said: "'+esc(mine.answer)+'"</span><span class="pts">'+(mine.correct?'+'+mine.gain:(mine.gain<0?mine.gain:'✗'))+'</span>';
+    list.appendChild(d); }
+  // mini scoreboard
+  r.scores.slice(0,5).forEach((row,i)=>{ const d=document.createElement('div'); d.className='answerline';
+    d.innerHTML='<span class="who">'+(i+1)+'. '+esc(row.name)+'</span><span class="pts">'+row.score+'</span>'; list.appendChild(d); });
+  document.getElementById('nextBtn').style.display='none';
+  document.getElementById('revealWait').style.display='block'; }
 
-    /* allow Enter key to submit on phones */
-    document.getElementById('answerInput').addEventListener('keydown', e => { if (e.key === 'Enter') submitAnswer(); });
+/* allow Enter key to submit on phones */
+document.getElementById('answerInput').addEventListener('keydown',e=>{ if(e.key==='Enter') submitAnswer(); });
 
-    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 
-    let musicOn = true, musicStarted = false, jazzParts = [];
+let musicOn=true, musicStarted=false, jazzParts=[];
 
-    async function startJazz() {
-      if (musicStarted || typeof Tone === 'undefined') return;
-      musicStarted = true;
-      await Tone.start();                       // unlock audio (needs a user gesture)
-      Tone.Transport.bpm.value = 76;            // slow, relaxed swing
+async function startJazz(){
+  if(musicStarted || typeof Tone==='undefined') return;
+  musicStarted=true;
+  await Tone.start();                       // unlock audio (needs a user gesture)
+  Tone.Transport.bpm.value = 76;            // slow, relaxed swing
 
-      // soft electric-piano-ish chords
-      const piano = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: 'triangle' },
-        envelope: { attack: 0.04, decay: 0.6, sustain: 0.25, release: 1.6 }
-      }).toDestination();
-      piano.volume.value = -16;
+  // soft electric-piano-ish chords
+  const piano = new Tone.PolySynth(Tone.Synth, {
+    oscillator:{ type:'triangle' },
+    envelope:{ attack:0.04, decay:0.6, sustain:0.25, release:1.6 }
+  }).toDestination();
+  piano.volume.value = -16;
 
-      // warm upright-bass-ish voice
-      const bass = new Tone.Synth({
-        oscillator: { type: 'sine' },
-        envelope: { attack: 0.03, decay: 0.3, sustain: 0.4, release: 0.8 }
-      }).toDestination();
-      bass.volume.value = -10;
+  // warm upright-bass-ish voice
+  const bass = new Tone.Synth({
+    oscillator:{ type:'sine' },
+    envelope:{ attack:0.03, decay:0.3, sustain:0.4, release:0.8 }
+  }).toDestination();
+  bass.volume.value = -10;
 
-      // brushed-drum pulse (filtered noise)
-      const brush = new Tone.NoiseSynth({
-        noise: { type: 'pink' },
-        envelope: { attack: 0.01, decay: 0.12, sustain: 0 }
-      }).toDestination();
-      brush.volume.value = -26;
+  // brushed-drum pulse (filtered noise)
+  const brush = new Tone.NoiseSynth({
+    noise:{ type:'pink' },
+    envelope:{ attack:0.01, decay:0.12, sustain:0 }
+  }).toDestination();
+  brush.volume.value = -26;
 
-      // a gentle ii–V–I–vi loop in F major (classic chill-jazz turnaround)
-      const chords = [
-        ['G3', 'Bb3', 'D4', 'F4'],   // Gm7
-        ['C3', 'E3', 'G3', 'Bb3'],   // C7
-        ['F3', 'A3', 'C4', 'E4'],    // Fmaj7
-        ['D3', 'F3', 'A3', 'C4'],    // Dm7
-      ];
-      const bassNotes = ['G2', 'C2', 'F2', 'D2'];
+  // a gentle ii–V–I–vi loop in F major (classic chill-jazz turnaround)
+  const chords = [
+    ['G3','Bb3','D4','F4'],   // Gm7
+    ['C3','E3','G3','Bb3'],   // C7
+    ['F3','A3','C4','E4'],    // Fmaj7
+    ['D3','F3','A3','C4'],    // Dm7
+  ];
+  const bassNotes = ['G2','C2','F2','D2'];
 
-      let bar = 0;
-      const chordPart = new Tone.Loop(time => {
-        const c = chords[bar % chords.length];
-        piano.triggerAttackRelease(c, '2n', time, 0.5);
-        bar++;
-      }, '1m').start(0);
+  let bar=0;
+  const chordPart = new Tone.Loop(time=>{
+    const c = chords[bar % chords.length];
+    piano.triggerAttackRelease(c, '2n', time, 0.5);
+    bar++;
+  }, '1m').start(0);
 
-      const walkPart = new Tone.Loop(time => {
-        const root = bassNotes[(bar) % bassNotes.length];
-        // simple walking feel: root on 1, a little movement on 3
-        bass.triggerAttackRelease(root, '4n', time, 0.7);
-        bass.triggerAttackRelease(root, '4n', time + Tone.Time('2n'), 0.5);
-      }, '1m').start(0);
+  const walkPart = new Tone.Loop(time=>{
+    const root = bassNotes[(bar) % bassNotes.length];
+    // simple walking feel: root on 1, a little movement on 3
+    bass.triggerAttackRelease(root, '4n', time, 0.7);
+    bass.triggerAttackRelease(root, '4n', time + Tone.Time('2n'), 0.5);
+  }, '1m').start(0);
 
-      const brushPart = new Tone.Loop(time => {
-        brush.triggerAttackRelease('8n', time);
-        brush.triggerAttackRelease('8n', time + Tone.Time('4n'));
-        brush.triggerAttackRelease('8n', time + Tone.Time('2n'));
-        brush.triggerAttackRelease('8n', time + Tone.Time('2n.'));
-      }, '1m').start(0);
+  const brushPart = new Tone.Loop(time=>{
+    brush.triggerAttackRelease('8n', time);
+    brush.triggerAttackRelease('8n', time + Tone.Time('4n'));
+    brush.triggerAttackRelease('8n', time + Tone.Time('2n'));
+    brush.triggerAttackRelease('8n', time + Tone.Time('2n.') );
+  }, '1m').start(0);
 
-      jazzParts = [chordPart, walkPart, brushPart];
-      if (musicOn) Tone.Transport.start();
-    }
+  jazzParts = [chordPart, walkPart, brushPart];
+  if(musicOn) Tone.Transport.start();
+}
 
-    function toggleMusic() {
-      musicOn = !musicOn;
-      const b = document.getElementById('musicBtn');
-      b.textContent = musicOn ? '🎵 Jazz: on' : '🔇 Jazz: off';
-      if (typeof Tone === 'undefined') return;
-      if (musicOn) { if (!musicStarted) startJazz(); else Tone.Transport.start(); }
-      else { Tone.Transport.pause(); }
-    }
+function toggleMusic(){
+  musicOn = !musicOn;
+  const b=document.getElementById('musicBtn');
+  b.textContent = musicOn ? '🎵 Jazz: on' : '🔇 Jazz: off';
+  if(typeof Tone==='undefined') return;
+  if(musicOn){ if(!musicStarted) startJazz(); else Tone.Transport.start(); }
+  else { Tone.Transport.pause(); }
+}
 
-    /* kick the music off on the very first tap/click anywhere (autoplay unlock) */
-    function firstGestureStart() {
-      if (musicOn) startJazz();
-      window.removeEventListener('pointerdown', firstGestureStart);
-      window.removeEventListener('keydown', firstGestureStart);
-    }
-    window.addEventListener('pointerdown', firstGestureStart);
-    window.addEventListener('keydown', firstGestureStart);
+/* kick the music off on the very first tap/click anywhere (autoplay unlock) */
+function firstGestureStart(){ if(musicOn) startJazz(); 
+  window.removeEventListener('pointerdown', firstGestureStart);
+  window.removeEventListener('keydown', firstGestureStart); }
+window.addEventListener('pointerdown', firstGestureStart);
+window.addEventListener('keydown', firstGestureStart);
 
-    /* ---------------- END-GAME SELFIE (joiner) ---------------- */
-    let endStream = null;
-    async function openEndCam() {
-      document.getElementById('endcam').style.display = 'flex';
-      const v = document.getElementById('endvideo'), s = document.getElementById('endshot');
-      v.style.display = ''; s.style.display = 'none';
-      document.getElementById('endcamRow').style.display = 'flex';
-      document.getElementById('endConfirmRow').style.display = 'none';
-      try {
-        endStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 320 } }, audio: false });
-        v.srcObject = endStream;
-      } catch (e) { alert("Camera unavailable — that's okay, your name still shows on the board!"); closeEndCam(); }
-    }
-    function endSnap() {
-      const v = document.getElementById('endvideo'), s = document.getElementById('endshot');
-      const size = Math.min(v.videoWidth, v.videoHeight);
-      s.width = 120; s.height = 120;
-      const sx = (v.videoWidth - size) / 2, sy = (v.videoHeight - size) / 2, c = s.getContext('2d');
-      c.save(); c.translate(120, 0); c.scale(-1, 1); c.drawImage(v, sx, sy, size, size, 0, 0, 120, 120); c.restore();
-      v.style.display = 'none'; s.style.display = '';
-      document.getElementById('endcamRow').style.display = 'none';
-      document.getElementById('endConfirmRow').style.display = 'flex';
-    }
-    function endRetake() {
-      const v = document.getElementById('endvideo'), s = document.getElementById('endshot');
-      v.style.display = ''; s.style.display = 'none';
-      document.getElementById('endcamRow').style.display = 'flex';
-      document.getElementById('endConfirmRow').style.display = 'none';
-    }
-    function useEndShot() {
-      const s = document.getElementById('endshot');
-      // circular crop to a small jpeg so it travels light over the wire
-      const c = document.createElement('canvas'); c.width = 96; c.height = 96; const cc = c.getContext('2d');
-      cc.save(); cc.beginPath(); cc.arc(48, 48, 48, 0, 7); cc.clip(); cc.drawImage(s, 0, 0, 96, 96); cc.restore();
-      const photo = c.toDataURL('image/jpeg', 0.6);
-      socket.emit('input', { t: 'photo', photo });
-      myPhotoSent = true; window.__phSent = true;
-      document.getElementById('selfieBtn').style.display = 'none';
-      closeEndCam();
-    }
-    function closeEndCam() {
-      if (endStream) { endStream.getTracks().forEach(t => t.stop()); endStream = null; }
-      document.getElementById('endcam').style.display = 'none';
-    }
+/* ---------------- END-GAME SELFIE (joiner) ---------------- */
+let endStream=null;
+async function openEndCam(){
+  document.getElementById('endcam').style.display='flex';
+  const v=document.getElementById('endvideo'), s=document.getElementById('endshot');
+  v.style.display=''; s.style.display='none';
+  document.getElementById('endcamRow').style.display='flex';
+  document.getElementById('endConfirmRow').style.display='none';
+  try{ endStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:320},height:{ideal:320}},audio:false});
+    v.srcObject=endStream;
+  }catch(e){ alert("Camera unavailable — that's okay, your name still shows on the board!"); closeEndCam(); }
+}
+function endSnap(){
+  const v=document.getElementById('endvideo'), s=document.getElementById('endshot');
+  const size=Math.min(v.videoWidth,v.videoHeight);
+  s.width=120; s.height=120;
+  const sx=(v.videoWidth-size)/2, sy=(v.videoHeight-size)/2, c=s.getContext('2d');
+  c.save(); c.translate(120,0); c.scale(-1,1); c.drawImage(v,sx,sy,size,size,0,0,120,120); c.restore();
+  v.style.display='none'; s.style.display='';
+  document.getElementById('endcamRow').style.display='none';
+  document.getElementById('endConfirmRow').style.display='flex';
+}
+function endRetake(){ const v=document.getElementById('endvideo'), s=document.getElementById('endshot');
+  v.style.display=''; s.style.display='none';
+  document.getElementById('endcamRow').style.display='flex';
+  document.getElementById('endConfirmRow').style.display='none'; }
+function useEndShot(){
+  const s=document.getElementById('endshot');
+  // circular crop to a small jpeg so it travels light over the wire
+  const c=document.createElement('canvas'); c.width=96;c.height=96; const cc=c.getContext('2d');
+  cc.save(); cc.beginPath(); cc.arc(48,48,48,0,7); cc.clip(); cc.drawImage(s,0,0,96,96); cc.restore();
+  const photo=c.toDataURL('image/jpeg',0.6);
+  socket.emit('input',{ t:'photo', photo });
+  myPhotoSent=true; window.__phSent=true;
+  document.getElementById('selfieBtn').style.display='none';
+  closeEndCam();
+}
+function closeEndCam(){ if(endStream){ endStream.getTracks().forEach(t=>t.stop()); endStream=null; }
+  document.getElementById('endcam').style.display='none'; }
 
-    /* auto-join via ?room=CODE (from QR) */
-    (function () {
-      const r = new URLSearchParams(location.search).get('room');
-      if (r) { pendingCode = r.toUpperCase(); isHost = false; flow = 'join'; show('nameScreen'); }
-    })();
+/* auto-join via ?room=CODE (from QR) */
+(function(){ const r=new URLSearchParams(location.search).get('room');
+  if(r){ pendingCode=r.toUpperCase(); isHost=false; flow='join'; show('nameScreen'); } })();
 
 
 
 
-  </script>
+</script>
 </body>
-
 </html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Finish the Verse — A Bible Party Game (v9)</title>
+<title>Finish the Verse — A Bible Party Game (v10)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
   @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
@@ -103,6 +103,26 @@
     </div>
   </div>
 
+  <!-- GAME MODE PICKER (host, after name) -->
+  <div class="screen" id="modeScreen">
+    <div class="card">
+      <h1 style="font-size:clamp(22px,6vw,34px)">Pick a Game</h1>
+      <p class="sub">Which game do you want to host?</p>
+      <button class="big gold" onclick="pickGame('quiz')">📖 Finish the Verse<br><span style="font-size:13px;font-family:Fredoka;font-weight:600">Classic verse quiz</span></button>
+      <button class="big alt" onclick="pickGame('race')">🏁 Journey Race<br><span style="font-size:13px;font-family:Fredoka;font-weight:600">Race across the board by answering!</span></button>
+    </div>
+  </div>
+
+  <!-- JOURNEY RACE BOARD (host screen) -->
+  <div class="screen" id="raceScreen">
+    <div class="card" style="max-width:560px">
+      <div class="qbig" id="raceProgress">Journey Race</div>
+      <canvas id="boardCanvas" width="520" height="520" style="width:100%;max-width:520px;background:#fff;border:5px solid var(--ink);border-radius:18px;"></canvas>
+      <div id="raceStatus" style="font-weight:700;margin-top:10px;min-height:24px"></div>
+      <button class="big gold" id="raceNextBtn" style="display:none" onclick="raceNextTurn()">Next Question ▶</button>
+    </div>
+  </div>
+
   <!-- NAME (joiner) -->
   <div class="screen" id="nameScreen">
     <div class="card">
@@ -139,7 +159,7 @@
         <div class="codebig" id="lobbyCodeJ">----</div>
       </div>
       <div class="players" id="players"></div>
-      <button class="big gold" id="startBtn" style="display:none" onclick="hostStartGame()">Start Game ▶</button>
+      <button class="big gold" id="startBtn" style="display:none" onclick="hostStartSelected()">Start Game ▶</button>
     </div>
   </div>
 
@@ -205,7 +225,7 @@
 
   <!-- END-GAME CAMERA -->
   <div id="endcam" style="display:none;position:fixed;inset:0;background:rgba(10,12,24,.93);z-index:60;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:18px;">
-    <p style="color:#fff;font-weight:700;font-size:15px;">Smile for the leaderboard! 😄</p>
+    <p style="color:#fff;font-weight:700;font-size:15px;">Smile for the leaderboard! ��</p>
     <video id="endvideo" autoplay playsinline style="width:min(70vw,260px);height:min(70vw,260px);object-fit:cover;border-radius:50%;border:6px solid #fff;background:#000;transform:scaleX(-1);"></video>
     <canvas id="endshot" style="display:none;width:min(70vw,260px);height:min(70vw,260px);border-radius:50%;border:6px solid #fff;transform:scaleX(-1);"></canvas>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;" id="endcamRow">
@@ -245,7 +265,7 @@ const VERSES = [
   { before:"We love because he first", blank:"loved", after:" us.",
     accept:["loved","loved us"], ref:"1 John 4:19", emoji:"👑❤️➡️🙋❤️" },
   { before:"God is", blank:"love", after:". Whoever abides in love abides in God.",
-    accept:["love"], ref:"1 John 4:16", emoji:"��🟰❤️🏡" },
+    accept:["love"], ref:"1 John 4:16", emoji:"👑🟰❤️🏡" },
   { before:"See what kind of love the Father has given to us, that we should be called children of",
     blank:"God", after:".", accept:["god"], ref:"1 John 3:1", emoji:"👑❤️👶👧👦" },
   { before:"Nothing can separate us from the love of", blank:"God", after:" in Christ Jesus our Lord.",
@@ -300,12 +320,15 @@ function goJoinName(){ const c=document.getElementById('joinCode').value.toUpper
   if(c.length!==4){ document.getElementById('joinErr').textContent='Enter the 4-letter code.'; return; }
   pendingCode=c; isHost=false; flow='join'; show('nameScreen'); }
 let flow='host';
+let gameType='quiz';   // 'quiz' or 'race'
 document.getElementById('nameGo').onclick=()=>{
   const n=document.getElementById('nameInput').value.trim();
   if(!n){ document.getElementById('nameErr').textContent='Please enter a name.'; return; }
   myName=n;
-  if(flow==='host') doCreate(); else doJoin();
+  if(flow==='host') show('modeScreen');   // host picks which game first
+  else doJoin();
 };
+function pickGame(type){ gameType=type; doCreate(); }
 function doCreate(){ socket.emit('createRoom',{name:myName},(res)=>{
   if(!res||!res.ok){ document.getElementById('nameErr').textContent='Could not create room.'; return; }
   myRoom=res.code; isHost=true; enterLobby(); showQR(); }); }
@@ -602,7 +625,7 @@ function showQuestionJoiner(p){ show('aScreen');
   if(p.mode==='blank'||p.mode==='choice'||p.mode==='wager'){
     vb.innerHTML = esc(p.before)+' <span class="blank"></span> '+esc(p.after);
   } else if(p.mode==='scramble'){
-    vb.innerHTML = (p.partial?'Rebuild the START of the verse 👇':'Rebuild the verse 👇')+'<div class="ref">'+esc(p.ref)+'</div>';
+    vb.innerHTML = (p.partial?'Rebuild the START of the verse ��':'Rebuild the verse 👇')+'<div class="ref">'+esc(p.ref)+'</div>';
   } else if(p.mode==='emoji'){
     vb.innerHTML = '<span style="font-size:clamp(34px,11vw,54px);letter-spacing:4px;">'+esc(p.emoji)+'</span>';
   } else {
@@ -843,6 +866,197 @@ function useEndShot(){
 }
 function closeEndCam(){ if(endStream){ endStream.getTracks().forEach(t=>t.stop()); endStream=null; }
   document.getElementById('endcam').style.display='none'; }
+
+/* ============================================================================
+   JOURNEY RACE  (Stage 1) — turn-based board race, lag-proof.
+   Everyone answers the same Bible question each round; correct moves you
+   forward (more if fast), wrong slips you back 1. First to FINISH wins.
+   Re-uses the same QR join, the same verse modes, and the same 'input' relay.
+   ============================================================================ */
+const BOARD_SPACES = 30;          // start (0) ... finish (30)
+let raceActive=false, racePos={}, raceOrder=[], raceRoundIdx=0, raceCurQ=null, raceAnswers={};
+
+function hostStartSelected(){
+  if(!isHost) return;
+  if(gameType==='race') hostStartRace();
+  else hostStartGame();
+}
+
+/* tell joiners which game so their screens match */
+function hostStartRace(){
+  if(!isHost) return;
+  raceActive=true;
+  racePos={}; raceRoundIdx=0;
+  Object.keys(players).forEach(id=>{ if(id!==myId) racePos[id]=0; });
+  raceOrder = shuffle([...VERSES.keys()]);
+  socket.emit('hostEvent',{ t:'raceStart' });
+  show('raceScreen');
+  drawBoard();
+  setTimeout(raceNextTurn, 600);
+}
+
+/* ---- board geometry: a snaking grid of spaces ---- */
+function spaceXY(n){
+  // 6 columns, snaking up the canvas
+  const cols=6, cell=80, pad=40;
+  const row=Math.floor(n/cols);
+  let col=n%cols; if(row%2===1) col=cols-1-col;     // snake direction
+  const x=pad+col*cell+cell/2;
+  const y=480-(row*cell+cell/2);                    // bottom-up
+  return {x,y};
+}
+function drawBoard(){
+  const cv=document.getElementById('boardCanvas'); if(!cv) return;
+  const g=cv.getContext('2d'); g.clearRect(0,0,520,520);
+  // path
+  for(let i=0;i<=BOARD_SPACES;i++){ const {x,y}=spaceXY(i);
+    g.beginPath(); g.arc(x,y,22,0,7);
+    g.fillStyle = i===0 ? '#46c66b' : i===BOARD_SPACES ? '#ffd23f' : '#f3e8ff';
+    g.fill(); g.lineWidth=3; g.strokeStyle='#1d1b3a'; g.stroke();
+    g.fillStyle='#1d1b3a'; g.font='bold 12px Fredoka'; g.textAlign='center'; g.textBaseline='middle';
+    g.fillText(i===0?'START':i===BOARD_SPACES?'🏁':i, x, y);
+  }
+  // tokens
+  const ids=Object.keys(racePos);
+  ids.forEach((id,k)=>{ const {x,y}=spaceXY(racePos[id]);
+    const off=(k-(ids.length-1)/2)*12;
+    g.beginPath(); g.arc(x+off,y-26,10,0,7);
+    g.fillStyle=['#ff5a5a','#4d8cff','#46c66b','#8b5cf6','#ffd23f','#ff9f43'][k%6];
+    g.fill(); g.lineWidth=2; g.strokeStyle='#1d1b3a'; g.stroke();
+  });
+}
+
+function raceNextTurn(){
+  if(!isHost) return;
+  document.getElementById('raceNextBtn').style.display='none';
+  raceAnswers={};
+  const v=VERSES[raceOrder[raceRoundIdx % raceOrder.length]];
+  // build a question using the same builders as the quiz (use blank or choice for simplicity)
+  const useChoice = Math.random()<0.5;
+  let q={ t:'raceQ', idx:raceRoundIdx, mode: useChoice?'choice':'blank', ref:v.ref,
+    before:v.before, after:v.after, seconds:ROUND_SECONDS };
+  if(useChoice){ q.options=pickDecoys(v.blank, DECOY_WORDS, 3); q.correct=v.blank; }
+  raceCurQ={q,v};
+  socket.emit('hostEvent', q);
+  document.getElementById('raceProgress').textContent='Round '+(raceRoundIdx+1)+' — answer to move!';
+  document.getElementById('raceStatus').textContent='Waiting for answers…';
+  startRaceTimer(ROUND_SECONDS);
+}
+let raceTimerInt=null, raceTimeLeft=0;
+function startRaceTimer(sec){ raceTimeLeft=sec; clearInterval(raceTimerInt);
+  raceTimerInt=setInterval(()=>{ raceTimeLeft--;
+    if(raceTimeLeft<=0){ clearInterval(raceTimerInt); raceResolve(); } },1000); }
+
+/* host collects race answers via the same 'input' relay (t:'raceAns') */
+function raceResolve(){
+  if(!isHost) return;
+  clearInterval(raceTimerInt);
+  const {q,v}=raceCurQ;
+  const moved=[];
+  Object.keys(racePos).forEach(id=>{
+    const a=raceAnswers[id];
+    let correct=false, step=0;
+    if(a){
+      correct = q.mode==='blank' ? isCorrect(a.answer,v) : normalize(a.answer)===normalize(q.correct);
+      if(correct){ step = 2 + Math.round((a.timeLeft/ROUND_SECONDS)*2); }  // 2–4 forward
+      else { step = -1; }                                                   // slip back 1
+    }
+    racePos[id]=Math.max(0, Math.min(BOARD_SPACES, racePos[id]+step));
+    moved.push({id, name:players[id]?players[id].name:'?', correct, step, pos:racePos[id]});
+  });
+  drawBoard();
+  // broadcast result so phones see how they did
+  socket.emit('hostEvent',{ t:'raceResult', answer:v.blank, ref:v.ref, moved,
+    positions:racePos, finish:BOARD_SPACES });
+  // win check
+  const winner=moved.find(m=>m.pos>=BOARD_SPACES);
+  const status=document.getElementById('raceStatus');
+  if(winner){
+    status.innerHTML='🏆 <b>'+esc(winner.name)+'</b> reached the finish! Well done!';
+    socket.emit('hostEvent',{ t:'raceWin', name:winner.name, positions:racePos });
+    raceActive=false;
+  } else {
+    const summary=moved.map(m=>esc(m.name)+' '+(m.step>0?('+'+m.step):m.step===-1?'−1':'0')).join(' · ');
+    status.textContent=summary;
+    raceRoundIdx++;
+    document.getElementById('raceNextBtn').style.display='inline-block';
+  }
+}
+
+/* ---- joiner side of the race ---- */
+let raceAnswered=false;
+socket.on('hostEvent',(evt)=>{
+  if(isHost) return;
+  if(evt.t==='raceStart'){ raceAnswered=false; show('aScreen');
+    document.getElementById('aPrompt').textContent='🏁 Journey Race starting…';
+    document.getElementById('aVersebox').innerHTML='Get ready to answer!';
+    document.getElementById('answerInput').style.display='none';
+    document.getElementById('answerGo').style.display='none';
+    document.getElementById('answerOptions').style.display='none';
+    document.getElementById('aWaiting').style.display='block';
+    document.getElementById('aWaiting').textContent='Waiting for the first question…';
+  }
+  else if(evt.t==='raceQ'){ raceAnswered=false; showRaceQuestion(evt); }
+  else if(evt.t==='raceResult'){ showRaceResult(evt); }
+  else if(evt.t==='raceWin'){ show('aScreen');
+    document.getElementById('aPrompt').textContent='🏆 '+evt.name+' won the race!';
+    document.getElementById('aVersebox').innerHTML='Thanks for playing! 🎉';
+    document.getElementById('answerOptions').style.display='none';
+    document.getElementById('aWaiting').style.display='none';
+  }
+});
+function showRaceQuestion(p){ show('aScreen');
+  document.getElementById('aProgress').textContent='Race — Round '+(p.idx+1);
+  document.getElementById('aPrompt').textContent = p.mode==='blank'?'Type the missing word!':'Tap the missing word!';
+  document.getElementById('aVersebox').innerHTML = esc(p.before)+' <span class="blank"></span> '+esc(p.after);
+  const input=document.getElementById('answerInput');
+  const optBox=document.getElementById('answerOptions');
+  const goBtn=document.getElementById('answerGo');
+  document.getElementById('aWaiting').style.display='none';
+  optBox.innerHTML='';
+  if(p.mode==='blank'){
+    input.style.display=''; input.value=''; input.disabled=false;
+    optBox.style.display='none'; goBtn.style.display='inline-block'; goBtn.disabled=false;
+    goBtn.onclick=()=>submitRaceAnswer(input.value.trim());
+    setTimeout(()=>input.focus(),100);
+  } else {
+    input.style.display='none'; goBtn.style.display='none'; optBox.style.display='block';
+    p.options.forEach(opt=>{ const b=document.createElement('button'); b.className='big alt'; b.textContent=opt;
+      b.onclick=()=>{ if(raceAnswered) return; submitRaceAnswer(opt); }; optBox.appendChild(b); });
+  }
+}
+function submitRaceAnswer(ans){
+  if(raceAnswered) return; raceAnswered=true;
+  socket.emit('input',{ t:'raceAns', answer:ans });
+  document.getElementById('answerInput').disabled=true;
+  document.getElementById('answerGo').style.display='none';
+  document.getElementById('answerOptions').style.display='none';
+  document.getElementById('aWaiting').style.display='block';
+  document.getElementById('aWaiting').textContent='Locked in! ✓ Watch the board…';
+}
+function showRaceResult(r){ show('aScreen');
+  const mine=r.moved.find(m=>m.id===myId);
+  document.getElementById('aPrompt').textContent='The word was: '+r.answer;
+  if(mine){ document.getElementById('aVersebox').innerHTML =
+    mine.correct ? ('✅ Correct! You moved +'+mine.step+' (now on space '+mine.pos+')')
+                 : ('❌ Not quite — you slipped back. (now on space '+mine.pos+')'); }
+  document.getElementById('answerOptions').style.display='none';
+  document.getElementById('aWaiting').style.display='block';
+  document.getElementById('aWaiting').textContent='Waiting for the next question…';
+}
+
+/* extend the host input handler to collect race answers too */
+socket.on('input',({id,state})=>{
+  if(!isHost) return;
+  if(state && state.t==='raceAns' && raceActive && !raceAnswers[id]){
+    raceAnswers[id]={answer:state.answer, timeLeft:raceTimeLeft};
+    // if all joiners answered, resolve early
+    const joiners=Object.keys(players).filter(pid=>pid!==myId);
+    if(joiners.length>0 && Object.keys(raceAnswers).length>=joiners.length){
+      clearInterval(raceTimerInt); setTimeout(raceResolve,400);
+    }
+  }
+});
 
 /* auto-join via ?room=CODE (from QR) */
 (function(){ const r=new URLSearchParams(location.search).get('room');

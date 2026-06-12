@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Finish the Verse — A Bible Party Game (v11)</title>
+<title>Finish the Verse — A Bible Party Game (v12)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
   @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
@@ -27,6 +26,13 @@
     animation:introUp .8s ease both .9s;text-shadow:2px 2px 0 var(--ink);}
   .introCross{font-size:clamp(46px,15vw,90px);animation:introSpin 1.1s cubic-bezier(.2,1.2,.4,1) both .3s;}
   .introStar{position:absolute;font-size:26px;animation:starFloat 2.4s ease-in infinite;}
+  @keyframes wordPop { 0%{transform:scale(2.5);opacity:0;letter-spacing:30px;} 60%{transform:scale(1);opacity:1;} 100%{transform:scale(1);opacity:1;letter-spacing:normal;} }
+  @keyframes wordFade { 0%{opacity:0;transform:translateY(20px);} 100%{opacity:1;transform:translateY(0);} }
+  @keyframes bigReveal { 0%{transform:scale(.2) rotate(-8deg);opacity:0;} 60%{transform:scale(1.15) rotate(3deg);opacity:1;} 100%{transform:scale(1) rotate(0);opacity:1;} }
+  .cineWord{font-family:'Bungee',cursive;color:#fff;font-size:clamp(28px,9vw,52px);animation:wordPop .8s ease both;text-shadow:2px 2px 0 var(--ink);}
+  .cineSmall{font-family:'Fredoka';font-weight:700;color:#ffe9c2;font-size:clamp(18px,5vw,26px);animation:wordFade .7s ease both;}
+  .cineBig{font-family:'Bungee',cursive;color:#ffd23f;font-size:clamp(40px,13vw,80px);line-height:1.02;
+    animation:bigReveal 1s cubic-bezier(.2,1.3,.4,1) both,introGlow 2s ease-in-out infinite .8s;text-shadow:3px 3px 0 var(--ink);}
   :root{
     --ink:#1d1b3a; --gold:#ffd23f; --brick:#c8612f; --panel:#fff7e8;
     --p1:#ff5a5a; --p2:#4d8cff; --p3:#46c66b; --purple:#8b5cf6;
@@ -111,17 +117,17 @@
 <div class="net" id="musicBtn" style="left:auto;right:8px;cursor:pointer;" onclick="toggleMusic()">🎵 Jazz: on</div>
 <div id="app">
 
-  <!-- ANIMATED INTRO (plays after joining) -->
+  <!-- CINEMATIC INTRO (plays after joining) -->
   <div class="introWrap" id="introWrap" style="display:none">
     <div class="sweep"></div>
     <div class="introStar" style="left:14%;top:24%;animation-delay:.2s">✨</div>
     <div class="introStar" style="left:80%;top:30%;animation-delay:.7s">⭐</div>
     <div class="introStar" style="left:24%;top:70%;animation-delay:1.1s">🌟</div>
     <div class="introStar" style="left:72%;top:66%;animation-delay:1.5s">✨</div>
-    <div class="introCross">✝️</div>
-    <div class="introTitle">Finish the Verse</div>
-    <div class="introSub">Welcome to the journey,</div>
-    <div class="introName" id="introName">friend</div>
+    <div id="introStage" style="position:relative;z-index:2;"></div>
+    <button id="introSkip" onclick="skipIntro()" style="position:absolute;bottom:22px;right:22px;z-index:5;
+      background:#ffffff22;border:2px solid #ffffff66;color:#fff;border-radius:20px;padding:6px 16px;
+      font-family:Fredoka;font-weight:700;font-size:13px;cursor:pointer;">Skip ▶</button>
   </div>
 
   <!-- LANDING -->
@@ -302,7 +308,7 @@ const VERSES = [
   { before:"See what kind of love the Father has given to us, that we should be called children of",
     blank:"God", after:".", accept:["god"], ref:"1 John 3:1", emoji:"👑❤️👶👧👦" },
   { before:"Nothing can separate us from the love of", blank:"God", after:" in Christ Jesus our Lord.",
-    accept:["god","christ","christ jesus"], ref:"Romans 8:39", emoji:"🚫✂️👑❤️" },
+    accept:["god","christ","christ jesus"], ref:"Romans 8:39", emoji:"🚫✂️��❤️" },
   { before:"The steadfast love of the Lord never", blank:"ends", after:"; his mercies are new every morning.",
     accept:["ends","ceases"], ref:"Lamentations 3:22", emoji:"👑❤️♾️🌅🔄" },
   { before:"As the Father has loved me, so have I loved you. Abide in my", blank:"love", after:".",
@@ -317,7 +323,7 @@ const VERSES = [
   { before:"Whatever you do, work heartily, as for the Lord and not for",
     blank:"men", after:".", accept:["men","man","people"], ref:"Colossians 3:23", emoji:"💪🛠️👑🙌" },
   { before:"Trust in the Lord with all your", blank:"heart", after:", and lean not on your own understanding.",
-    accept:["heart"], ref:"Proverbs 3:5", emoji:"🤝👑💯❤️🚫🧠" },
+    accept:["heart"], ref:"Proverbs 3:5", emoji:"🤝👑💯❤️🚫��" },
   { before:"I can do all things through", blank:"Christ", after:" who strengthens me.",
     accept:["christ","him","god"], ref:"Philippians 4:13", emoji:"💪🌟✝️" },
   { before:"Commit your work to the Lord, and your plans will be",
@@ -363,15 +369,78 @@ document.getElementById('nameGo').onclick=()=>{
 };
 function pickGame(type){ gameType=type; doCreate(); }
 
-/* animated welcome intro — plays ~3.2s then runs the callback */
+/* cinematic staged intro: "Welcome to ... JIL GAME" with triumphant music */
+let introSkipped=false, introDone=null;
 function playIntro(name, done){
-  document.getElementById('introName').textContent = name+'!';
+  introSkipped=false; introDone=done;
   const wrap=document.getElementById('introWrap');
-  wrap.style.display='flex';
-  setTimeout(()=>{ wrap.style.transition='opacity .5s'; wrap.style.opacity='0';
-    setTimeout(()=>{ wrap.style.display='none'; wrap.style.opacity='1'; wrap.style.transition='';
-      if(done) done(); }, 500);
-  }, 3200);
+  const stage=document.getElementById('introStage');
+  wrap.style.display='flex'; wrap.style.opacity='1';
+  playIntroMusic();
+  // sequence of frames: [html, how long to show in ms]
+  const frames=[
+    ['<div class="cineSmall">✝️ JIL presents…</div>', 1100],
+    ['<div class="cineWord">WELCOME</div>', 1000],
+    ['<div class="cineSmall">to the</div>', 800],
+    ['<div class="cineBig">JIL GAME</div>', 1800],
+    ['<div class="cineSmall">Get ready, '+esc(name)+'! 🙌</div>', 1200],
+  ];
+  let i=0;
+  function next(){
+    if(introSkipped) return;
+    if(i>=frames.length){ endIntro(); return; }
+    stage.innerHTML=frames[i][0];
+    const dur=frames[i][1]; i++;
+    introTimer=setTimeout(next, dur);
+  }
+  next();
+}
+let introTimer=null;
+function endIntro(){
+  clearTimeout(introTimer);
+  stopIntroMusic();
+  const wrap=document.getElementById('introWrap');
+  wrap.style.transition='opacity .5s'; wrap.style.opacity='0';
+  setTimeout(()=>{ wrap.style.display='none'; wrap.style.opacity='1'; wrap.style.transition='';
+    const cb=introDone; introDone=null; if(cb) cb(); }, 500);
+}
+function skipIntro(){ if(introSkipped) return; introSkipped=true; endIntro(); }
+
+/* ---- original triumphant, uplifting intro music (Tone.js, copyright-free) ---- */
+let introSynths=[];
+async function playIntroMusic(){
+  if(typeof Tone==='undefined') return;
+  try{ await Tone.start(); }catch(e){}
+  // pause the background jazz so the cinematic music plays cleanly
+  try{ if(musicStarted) Tone.Transport.pause(); }catch(e){}
+  const now=Tone.now();
+  // warm brass-like pad for the swell
+  const pad=new Tone.PolySynth(Tone.Synth,{oscillator:{type:'sawtooth'},
+    envelope:{attack:0.08,decay:0.3,sustain:0.6,release:1.2}}).toDestination();
+  pad.volume.value=-14;
+  // bright bell on top for the triumphant feel
+  const bell=new Tone.Synth({oscillator:{type:'triangle'},
+    envelope:{attack:0.01,decay:0.4,sustain:0.2,release:0.8}}).toDestination();
+  bell.volume.value=-10;
+  introSynths=[pad,bell];
+  // a rising, uplifting progression in C major: C → G → Am → F → C(big)
+  const chords=[
+    [['C4','E4','G4'],0.0],
+    [['G3','B3','D4'],0.9],
+    [['A3','C4','E4'],1.7],
+    [['F3','A3','C4'],2.5],
+    [['C4','E4','G4','C5'],3.3],   // triumphant resolve
+  ];
+  chords.forEach(([notes,t])=>{ try{ pad.triggerAttackRelease(notes,'2n',now+t,0.6); }catch(e){} });
+  // melody bells climbing up to the peak
+  const mel=[['G4',0.2],['C5',1.0],['E5',1.8],['G5',2.6],['C6',3.4]];
+  mel.forEach(([n,t])=>{ try{ bell.triggerAttackRelease(n,'4n',now+t,0.7); }catch(e){} });
+}
+function stopIntroMusic(){
+  introSynths.forEach(s=>{ try{ s.volume.rampTo(-40,0.4); setTimeout(()=>{try{s.dispose();}catch(e){}},600);}catch(e){} });
+  introSynths=[];
+  // bring the background jazz back if it's enabled
+  try{ if(musicOn && musicStarted) setTimeout(()=>{ try{Tone.Transport.start();}catch(e){} }, 700); }catch(e){}
 }
 function doCreate(){ socket.emit('createRoom',{name:myName},(res)=>{
   if(!res||!res.ok){ document.getElementById('nameErr').textContent='Could not create room.'; return; }
@@ -858,7 +927,7 @@ async function startJazz(){
 function toggleMusic(){
   musicOn = !musicOn;
   const b=document.getElementById('musicBtn');
-  b.textContent = musicOn ? '�� Jazz: on' : '🔇 Jazz: off';
+  b.textContent = musicOn ? '🎵 Jazz: on' : '🔇 Jazz: off';
   if(typeof Tone==='undefined') return;
   if(musicOn){ if(!musicStarted) startJazz(); else Tone.Transport.start(); }
   else { Tone.Transport.pause(); }
@@ -1043,7 +1112,7 @@ socket.on('hostEvent',(evt)=>{
   else if(evt.t==='raceQ'){ raceAnswered=false; showRaceQuestion(evt); }
   else if(evt.t==='raceResult'){ showRaceResult(evt); }
   else if(evt.t==='raceWin'){ show('aScreen');
-    document.getElementById('aPrompt').textContent='🏆 '+evt.name+' won the race!';
+    document.getElementById('aPrompt').textContent='�� '+evt.name+' won the race!';
     document.getElementById('aVersebox').innerHTML='Thanks for playing! 🎉';
     document.getElementById('answerOptions').style.display='none';
     document.getElementById('aWaiting').style.display='none';

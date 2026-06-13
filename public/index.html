@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Finish the Verse — A Bible Party Game (v13)</title>
+<title>Finish the Verse — A Bible Party Game (v14)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
   @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
@@ -157,7 +156,10 @@
   <div class="screen" id="raceScreen">
     <div class="card" style="max-width:560px">
       <div class="qbig" id="raceProgress">Journey Race</div>
-      <canvas id="boardCanvas" width="520" height="520" style="width:100%;max-width:520px;background:#fff;border:5px solid var(--ink);border-radius:18px;"></canvas>
+      <div id="boardWrap" style="position:relative;width:100%;max-width:520px;margin:0 auto;aspect-ratio:1/1;">
+        <div id="boardSvg" style="position:absolute;inset:0;"></div>
+        <div id="tokenLayer" style="position:absolute;inset:0;pointer-events:none;"></div>
+      </div>
       <div id="raceStatus" style="font-weight:700;margin-top:10px;min-height:24px"></div>
       <button class="big gold" id="raceNextBtn" style="display:none" onclick="raceNextTurn()">Next Question ▶</button>
     </div>
@@ -800,7 +802,7 @@ function showQuestionJoiner(p){ show('aScreen');
   if(p.mode==='blank'||p.mode==='choice'||p.mode==='wager'){
     vb.innerHTML = esc(p.before)+' <span class="blank"></span> '+esc(p.after);
   } else if(p.mode==='scramble'){
-    vb.innerHTML = (p.partial?'Rebuild the START of the verse 👇':'Rebuild the verse ��')+'<div class="ref">'+esc(p.ref)+'</div>';
+    vb.innerHTML = (p.partial?'Rebuild the START of the verse 👇':'Rebuild the verse 👇')+'<div class="ref">'+esc(p.ref)+'</div>';
   } else if(p.mode==='emoji'){
     vb.innerHTML = '<span style="font-size:clamp(34px,11vw,54px);letter-spacing:4px;">'+esc(p.emoji)+'</span>';
   } else {
@@ -1071,67 +1073,424 @@ function hostStartRace(){
 }
 
 /* ---- board geometry: a snaking grid of spaces ---- */
-function spaceXY(n){
-  // 6 columns, snaking up the canvas
-  const cols=6, cell=80, pad=40;
-  const row=Math.floor(n/cols);
-  let col=n%cols; if(row%2===1) col=cols-1-col;     // snake direction
-  const x=pad+col*cell+cell/2;
-  const y=480-(row*cell+cell/2);                    // bottom-up
-  return {x,y};
+// exact center coordinates of each space (0..30), extracted from the SVG board art
+const SPACE_XY = [
+  {x:70,y:451},{x:146,y:451},{x:222,y:451},{x:298,y:451},{x:374,y:451},{x:450,y:451},
+  {x:450,y:375},{x:374,y:375},{x:298,y:375},{x:222,y:375},{x:146,y:375},{x:70,y:375},
+  {x:70,y:299},{x:146,y:299},{x:222,y:299},{x:298,y:299},{x:374,y:299},{x:450,y:299},
+  {x:450,y:223},{x:374,y:223},{x:298,y:223},{x:222,y:223},{x:146,y:223},{x:70,y:223},
+  {x:70,y:147},{x:146,y:147},{x:222,y:147},{x:298,y:147},{x:374,y:147},{x:450,y:147},
+  {x:260,y:70}
+];
+const BOARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="520" height="520" viewBox="0 0 520 520">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF3D6"></stop>
+      <stop offset="0.45" stop-color="#FFE9CE"></stop>
+      <stop offset="0.75" stop-color="#DCF1F7"></stop>
+      <stop offset="1" stop-color="#CFEFF6"></stop>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFF3B8" stop-opacity="0.85"></stop>
+      <stop offset="0.55" stop-color="#FFEBB0" stop-opacity="0.35"></stop>
+      <stop offset="1" stop-color="#FFEBB0" stop-opacity="0"></stop>
+    </radialGradient>
+    <radialGradient id="sunCore" cx="0.4" cy="0.35" r="0.7">
+      <stop offset="0" stop-color="#FFF1B0"></stop>
+      <stop offset="1" stop-color="#FFD15C"></stop>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#7a5a2a" flood-opacity="0.18"></feDropShadow>
+    </filter>
+  </defs>
+
+  
+  <rect width="520" height="520" fill="url(#sky)"></rect>
+  
+  
+  <circle cx="92" cy="58" r="150" fill="url(#sunGlow)"></circle>
+  <line x1="136" y1="58" x2="154" y2="58" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line><line x1="129.01515544457197" y1="81.7881959680463" x2="144.15771903553323" y2="91.51973068224706" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line><line x1="110.278260572083" y1="98.0238077955988" x2="117.75573080611696" y2="114.39718371198013" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line><line x1="85.73814711597547" y1="101.55214344276104" x2="83.17648002705633" y2="119.36892939661783" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line><line x1="63.18612770640746" y1="91.25298127158737" x2="51.39863449539233" y2="104.85647360996401" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line><line x1="49.78230916096212" y1="70.39623250102292" x2="32.51143563590117" y2="75.46741852416866" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line><line x1="49.782309160962114" y1="45.603767498977106" x2="32.51143563590116" y2="40.53258147583138" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line><line x1="63.18612770640745" y1="24.74701872841264" x2="51.398634495392315" y2="11.143526390035994" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line><line x1="85.73814711597545" y1="14.447856557238964" x2="83.17648002705631" y2="-3.3689293966178298" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line><line x1="110.27826057208301" y1="17.9761922044012" x2="117.75573080611699" y2="1.6028162880198735" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line><line x1="129.01515544457195" y1="34.211804031953676" x2="144.1577190355332" y2="24.480269317752914" stroke="#FFD15C" stroke-width="5" stroke-linecap="round"></line>
+  <circle cx="92" cy="58" r="38" fill="#FFE07A"></circle>
+  <circle cx="92" cy="58" r="38" fill="url(#sunCore)"></circle>
+
+  
+  
+  <g transform="translate(420,52)" fill="#FFFFFF">
+    <ellipse cx="0" cy="0" rx="26" ry="15"></ellipse>
+    <circle cx="-16" cy="2" r="12"></circle>
+    <circle cx="16" cy="2" r="13"></circle>
+    <circle cx="2" cy="-9" r="14"></circle>
+  </g>
+  
+  <g transform="translate(300,36)" fill="#FFFFFF">
+    <ellipse cx="0" cy="0" rx="18.2" ry="10.5"></ellipse>
+    <circle cx="-11.2" cy="1.4" r="8.399999999999999"></circle>
+    <circle cx="11.2" cy="1.4" r="9.1"></circle>
+    <circle cx="1.4" cy="-6.3" r="9.799999999999999"></circle>
+  </g>
+  
+  <g transform="translate(470,150)" fill="#FFFFFF">
+    <ellipse cx="0" cy="0" rx="18.2" ry="10.5"></ellipse>
+    <circle cx="-11.2" cy="1.4" r="8.399999999999999"></circle>
+    <circle cx="11.2" cy="1.4" r="9.1"></circle>
+    <circle cx="1.4" cy="-6.3" r="9.799999999999999"></circle>
+  </g>
+  
+  <g transform="translate(48,200)" fill="#FFFFFF">
+    <ellipse cx="0" cy="0" rx="16.12" ry="9.3"></ellipse>
+    <circle cx="-9.92" cy="1.24" r="7.4399999999999995"></circle>
+    <circle cx="9.92" cy="1.24" r="8.06"></circle>
+    <circle cx="1.24" cy="-5.58" r="8.68"></circle>
+  </g>
+
+
+  
+  <path d="M0,300 Q120,255 260,288 Q400,320 520,292 L520,520 L0,520 Z" fill="#D4EFB0"></path>
+  <path d="M0,355 Q150,318 300,352 Q430,382 520,356 L520,520 L0,520 Z" fill="#B7E690"></path>
+  <path d="M0,430 Q140,398 280,428 Q420,456 520,428 L520,520 L0,520 Z" fill="#99D877"></path>
+
+  
+  <g transform="translate(370,48)">
+    <ellipse cx="0" cy="30" rx="46" ry="14" fill="#BFE6A0"></ellipse>
+    <rect x="-19" y="-4" width="38" height="34" rx="3" fill="#FBEFD2" stroke="#E7C98C" stroke-width="2"></rect>
+    <path d="M-23,-4 L0,-24 L23,-4 Z" fill="#E89A6B"></path>
+    <rect x="-5" y="-30" width="10" height="16" fill="#FBEFD2" stroke="#E7C98C" stroke-width="1.5"></rect>
+    <path d="M-7,-30 L0,-40 L7,-30 Z" fill="#E89A6B"></path>
+    <path d="M0,-52 L0,-40 M-4,-48 L4,-48" stroke="#C98A12" stroke-width="2.4" stroke-linecap="round"></path>
+    <rect x="-6" y="10" width="12" height="20" rx="6" fill="#E7B86A"></rect>
+    <circle cx="0" cy="2" r="4.5" fill="#9BD0E8"></circle>
+  </g>
+  
+  
+  <g transform="translate(34,452)">
+    <rect x="-3.8" y="5.699999999999999" width="7.6" height="15.2" rx="2.8499999999999996" fill="#C99B6A"></rect>
+    <circle cx="0" cy="-13.299999999999999" r="14.25" fill="#6CCB82"></circle>
+    <circle cx="-11.399999999999999" cy="-1.9" r="12.35" fill="#6CCB82"></circle>
+    <circle cx="11.399999999999999" cy="-1.9" r="12.35" fill="#6CCB82"></circle>
+    <circle cx="0" cy="-5.699999999999999" r="14.25" fill="#9BE0A8"></circle>
+    <circle cx="-8.549999999999999" cy="1.9" r="9.5" fill="#9BE0A8"></circle>
+    <circle cx="8.549999999999999" cy="1.9" r="9.5" fill="#9BE0A8"></circle>
+  </g>
+  
+  <g transform="translate(488,452)">
+    <rect x="-4" y="6" width="8" height="16" rx="3" fill="#C99B6A"></rect>
+    <circle cx="0" cy="-14" r="15" fill="#74CE88"></circle>
+    <circle cx="-12" cy="-2" r="13" fill="#74CE88"></circle>
+    <circle cx="12" cy="-2" r="13" fill="#74CE88"></circle>
+    <circle cx="0" cy="-6" r="15" fill="#A8E6B0"></circle>
+    <circle cx="-9" cy="2" r="10" fill="#A8E6B0"></circle>
+    <circle cx="9" cy="2" r="10" fill="#A8E6B0"></circle>
+  </g>
+  
+  <g transform="translate(30,280)">
+    <rect x="-2.48" y="3.7199999999999998" width="4.96" height="9.92" rx="1.8599999999999999" fill="#C99B6A"></rect>
+    <circle cx="0" cy="-8.68" r="9.3" fill="#84D596"></circle>
+    <circle cx="-7.4399999999999995" cy="-1.24" r="8.06" fill="#84D596"></circle>
+    <circle cx="7.4399999999999995" cy="-1.24" r="8.06" fill="#84D596"></circle>
+    <circle cx="0" cy="-3.7199999999999998" r="9.3" fill="#B6E8BC"></circle>
+    <circle cx="-5.58" cy="1.24" r="6.2" fill="#B6E8BC"></circle>
+    <circle cx="5.58" cy="1.24" r="6.2" fill="#B6E8BC"></circle>
+  </g>
+  
+  <g transform="translate(492,320)">
+    <rect x="-2.4" y="3.5999999999999996" width="4.8" height="9.6" rx="1.7999999999999998" fill="#C99B6A"></rect>
+    <circle cx="0" cy="-8.4" r="9" fill="#84D596"></circle>
+    <circle cx="-7.199999999999999" cy="-1.2" r="7.8" fill="#84D596"></circle>
+    <circle cx="7.199999999999999" cy="-1.2" r="7.8" fill="#84D596"></circle>
+    <circle cx="0" cy="-3.5999999999999996" r="9" fill="#B6E8BC"></circle>
+    <circle cx="-5.3999999999999995" cy="1.2" r="6" fill="#B6E8BC"></circle>
+    <circle cx="5.3999999999999995" cy="1.2" r="6" fill="#B6E8BC"></circle>
+  </g>
+
+  
+  <g transform="translate(36,486)">
+    <circle cx="5" cy="0" r="3.4" fill="#F6A5C0"></circle><circle cx="1.5450849718747373" cy="4.755282581475767" r="3.4" fill="#F6A5C0"></circle><circle cx="-4.045084971874736" cy="2.9389262614623664" r="3.4" fill="#F6A5C0"></circle><circle cx="-4.045084971874738" cy="-2.938926261462365" r="3.4" fill="#F6A5C0"></circle><circle cx="1.5450849718747361" cy="-4.755282581475768" r="3.4" fill="#F6A5C0"></circle>
+    <circle cx="0" cy="0" r="3" fill="#FFE07A"></circle>
+  </g> <g transform="translate(120,498)">
+    <circle cx="5" cy="0" r="3.4" fill="#C9A7EC"></circle><circle cx="1.5450849718747373" cy="4.755282581475767" r="3.4" fill="#C9A7EC"></circle><circle cx="-4.045084971874736" cy="2.9389262614623664" r="3.4" fill="#C9A7EC"></circle><circle cx="-4.045084971874738" cy="-2.938926261462365" r="3.4" fill="#C9A7EC"></circle><circle cx="1.5450849718747361" cy="-4.755282581475768" r="3.4" fill="#C9A7EC"></circle>
+    <circle cx="0" cy="0" r="3" fill="#FFE07A"></circle>
+  </g> <g transform="translate(205,488)">
+    <circle cx="5" cy="0" r="3.4" fill="#FBC85A"></circle><circle cx="1.5450849718747373" cy="4.755282581475767" r="3.4" fill="#FBC85A"></circle><circle cx="-4.045084971874736" cy="2.9389262614623664" r="3.4" fill="#FBC85A"></circle><circle cx="-4.045084971874738" cy="-2.938926261462365" r="3.4" fill="#FBC85A"></circle><circle cx="1.5450849718747361" cy="-4.755282581475768" r="3.4" fill="#FBC85A"></circle>
+    <circle cx="0" cy="0" r="3" fill="#FFE07A"></circle>
+  </g>
+  <g transform="translate(315,498)">
+    <circle cx="5" cy="0" r="3.4" fill="#7FCBE8"></circle><circle cx="1.5450849718747373" cy="4.755282581475767" r="3.4" fill="#7FCBE8"></circle><circle cx="-4.045084971874736" cy="2.9389262614623664" r="3.4" fill="#7FCBE8"></circle><circle cx="-4.045084971874738" cy="-2.938926261462365" r="3.4" fill="#7FCBE8"></circle><circle cx="1.5450849718747361" cy="-4.755282581475768" r="3.4" fill="#7FCBE8"></circle>
+    <circle cx="0" cy="0" r="3" fill="#FFE07A"></circle>
+  </g> <g transform="translate(404,486)">
+    <circle cx="5" cy="0" r="3.4" fill="#F79B72"></circle><circle cx="1.5450849718747373" cy="4.755282581475767" r="3.4" fill="#F79B72"></circle><circle cx="-4.045084971874736" cy="2.9389262614623664" r="3.4" fill="#F79B72"></circle><circle cx="-4.045084971874738" cy="-2.938926261462365" r="3.4" fill="#F79B72"></circle><circle cx="1.5450849718747361" cy="-4.755282581475768" r="3.4" fill="#F79B72"></circle>
+    <circle cx="0" cy="0" r="3" fill="#FFE07A"></circle>
+  </g> <g transform="translate(486,498)">
+    <circle cx="5" cy="0" r="3.4" fill="#F6A5C0"></circle><circle cx="1.5450849718747373" cy="4.755282581475767" r="3.4" fill="#F6A5C0"></circle><circle cx="-4.045084971874736" cy="2.9389262614623664" r="3.4" fill="#F6A5C0"></circle><circle cx="-4.045084971874738" cy="-2.938926261462365" r="3.4" fill="#F6A5C0"></circle><circle cx="1.5450849718747361" cy="-4.755282581475768" r="3.4" fill="#F6A5C0"></circle>
+    <circle cx="0" cy="0" r="3" fill="#FFE07A"></circle>
+  </g>
+  <g transform="translate(70,505)">
+    <circle cx="5" cy="0" r="3.4" fill="#9BE0A8"></circle><circle cx="1.5450849718747373" cy="4.755282581475767" r="3.4" fill="#9BE0A8"></circle><circle cx="-4.045084971874736" cy="2.9389262614623664" r="3.4" fill="#9BE0A8"></circle><circle cx="-4.045084971874738" cy="-2.938926261462365" r="3.4" fill="#9BE0A8"></circle><circle cx="1.5450849718747361" cy="-4.755282581475768" r="3.4" fill="#9BE0A8"></circle>
+    <circle cx="0" cy="0" r="3" fill="#FFE07A"></circle>
+  </g> <g transform="translate(450,505)">
+    <circle cx="5" cy="0" r="3.4" fill="#FBC85A"></circle><circle cx="1.5450849718747373" cy="4.755282581475767" r="3.4" fill="#FBC85A"></circle><circle cx="-4.045084971874736" cy="2.9389262614623664" r="3.4" fill="#FBC85A"></circle><circle cx="-4.045084971874738" cy="-2.938926261462365" r="3.4" fill="#FBC85A"></circle><circle cx="1.5450849718747361" cy="-4.755282581475768" r="3.4" fill="#FBC85A"></circle>
+    <circle cx="0" cy="0" r="3" fill="#FFE07A"></circle>
+  </g>
+
+
+  
+  <path d="M70,450 L146,450 L222,450 L298,450 L374,450 L450,450 L450,374 L374,374 L298,374 L222,374 L146,374 L70,374 L70,298 L146,298 L222,298 L298,298 L374,298 L450,298 L450,222 L374,222 L298,222 L222,222 L146,222 L70,222 L70,146 L146,146 L222,146 L298,146 L374,146 L450,146 C450,96 360,70 260,70" fill="none" stroke="#EDD9AE" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"></path>
+  <path d="M70,450 L146,450 L222,450 L298,450 L374,450 L450,450 L450,374 L374,374 L298,374 L222,374 L146,374 L70,374 L70,298 L146,298 L222,298 L298,298 L374,298 L450,298 L450,222 L374,222 L298,222 L222,222 L146,222 L70,222 L70,146 L146,146 L222,146 L298,146 L374,146 L450,146 C450,96 360,70 260,70" fill="none" stroke="#FBF1DB" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"></path>
+  <path d="M70,450 L146,450 L222,450 L298,450 L374,450 L450,450 L450,374 L374,374 L298,374 L222,374 L146,374 L70,374 L70,298 L146,298 L222,298 L298,298 L374,298 L450,298 L450,222 L374,222 L298,222 L222,222 L146,222 L70,222 L70,146 L146,146 L222,146 L298,146 L374,146 L450,146 C450,96 360,70 260,70" fill="none" stroke="#F0DCA9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 16"></path>
+
+  
+  <g filter="url(#soft)">
+  
+  <g>
+    <ellipse cx="70" cy="463" rx="25" ry="9" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="70" cy="450" r="25" fill="#3FA85A"></circle>
+    <circle cx="70" cy="450" r="21" fill="#6BCB77"></circle>
+    <circle cx="70" cy="445" r="15" fill="#86D98E" opacity="0.55"></circle>
+    <text x="70" y="451" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="11" letter-spacing="0.5" fill="#fff">START</text>
+  </g>
+  <g>
+    <ellipse cx="146" cy="462" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="146" cy="450" r="23" fill="#E97FA6"></circle>
+    <circle cx="146" cy="450" r="19.5" fill="#F6A5C0"></circle>
+    <ellipse cx="146" cy="443" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="146" y="451" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#E97FA6" stroke-width="0.6" paint-order="stroke">1</text>
+  </g>
+  <g>
+    <ellipse cx="222" cy="462" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="222" cy="450" r="23" fill="#EFAE2E"></circle>
+    <circle cx="222" cy="450" r="19.5" fill="#FBC85A"></circle>
+    <ellipse cx="222" cy="443" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="222" y="451" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#EFAE2E" stroke-width="0.6" paint-order="stroke">2</text>
+  </g>
+  <g>
+    <ellipse cx="298" cy="462" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="298" cy="450" r="23" fill="#4FB0D8"></circle>
+    <circle cx="298" cy="450" r="19.5" fill="#7FCBE8"></circle>
+    <ellipse cx="298" cy="443" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="298" y="451" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#4FB0D8" stroke-width="0.6" paint-order="stroke">3</text>
+  </g>
+  <g>
+    <ellipse cx="374" cy="462" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="374" cy="450" r="23" fill="#6CCB82"></circle>
+    <circle cx="374" cy="450" r="19.5" fill="#9BE0A8"></circle>
+    <ellipse cx="374" cy="443" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="374" y="451" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#6CCB82" stroke-width="0.6" paint-order="stroke">4</text>
+  </g>
+  <g>
+    <ellipse cx="450" cy="462" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="450" cy="450" r="23" fill="#A87EDB"></circle>
+    <circle cx="450" cy="450" r="19.5" fill="#C9A7EC"></circle>
+    <ellipse cx="450" cy="443" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="450" y="451" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#A87EDB" stroke-width="0.6" paint-order="stroke">5</text>
+  </g>
+  <g>
+    <ellipse cx="450" cy="386" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="450" cy="374" r="23" fill="#EE7B4D"></circle>
+    <circle cx="450" cy="374" r="19.5" fill="#F79B72"></circle>
+    <ellipse cx="450" cy="367" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="450" y="375" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#EE7B4D" stroke-width="0.6" paint-order="stroke">6</text>
+  </g>
+  <g>
+    <ellipse cx="374" cy="386" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="374" cy="374" r="23" fill="#E97FA6"></circle>
+    <circle cx="374" cy="374" r="19.5" fill="#F6A5C0"></circle>
+    <ellipse cx="374" cy="367" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="374" y="375" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#E97FA6" stroke-width="0.6" paint-order="stroke">7</text>
+  </g>
+  <g>
+    <ellipse cx="298" cy="386" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="298" cy="374" r="23" fill="#EFAE2E"></circle>
+    <circle cx="298" cy="374" r="19.5" fill="#FBC85A"></circle>
+    <ellipse cx="298" cy="367" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="298" y="375" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#EFAE2E" stroke-width="0.6" paint-order="stroke">8</text>
+  </g>
+  <g>
+    <ellipse cx="222" cy="386" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="222" cy="374" r="23" fill="#4FB0D8"></circle>
+    <circle cx="222" cy="374" r="19.5" fill="#7FCBE8"></circle>
+    <ellipse cx="222" cy="367" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="222" y="375" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#4FB0D8" stroke-width="0.6" paint-order="stroke">9</text>
+  </g>
+  <g>
+    <ellipse cx="146" cy="386" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="146" cy="374" r="23" fill="#6CCB82"></circle>
+    <circle cx="146" cy="374" r="19.5" fill="#9BE0A8"></circle>
+    <ellipse cx="146" cy="367" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="146" y="375" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#6CCB82" stroke-width="0.6" paint-order="stroke">10</text>
+  </g>
+  <g>
+    <ellipse cx="70" cy="386" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="70" cy="374" r="23" fill="#A87EDB"></circle>
+    <circle cx="70" cy="374" r="19.5" fill="#C9A7EC"></circle>
+    <ellipse cx="70" cy="367" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="70" y="375" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#A87EDB" stroke-width="0.6" paint-order="stroke">11</text>
+  </g>
+  <g>
+    <ellipse cx="70" cy="310" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="70" cy="298" r="23" fill="#EE7B4D"></circle>
+    <circle cx="70" cy="298" r="19.5" fill="#F79B72"></circle>
+    <ellipse cx="70" cy="291" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="70" y="299" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#EE7B4D" stroke-width="0.6" paint-order="stroke">12</text>
+  </g>
+  <g>
+    <ellipse cx="146" cy="310" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="146" cy="298" r="23" fill="#E97FA6"></circle>
+    <circle cx="146" cy="298" r="19.5" fill="#F6A5C0"></circle>
+    <ellipse cx="146" cy="291" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="146" y="299" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#E97FA6" stroke-width="0.6" paint-order="stroke">13</text>
+  </g>
+  <g>
+    <ellipse cx="222" cy="310" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="222" cy="298" r="23" fill="#EFAE2E"></circle>
+    <circle cx="222" cy="298" r="19.5" fill="#FBC85A"></circle>
+    <ellipse cx="222" cy="291" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="222" y="299" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#EFAE2E" stroke-width="0.6" paint-order="stroke">14</text>
+  </g>
+  <g>
+    <ellipse cx="298" cy="310" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="298" cy="298" r="23" fill="#4FB0D8"></circle>
+    <circle cx="298" cy="298" r="19.5" fill="#7FCBE8"></circle>
+    <ellipse cx="298" cy="291" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="298" y="299" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#4FB0D8" stroke-width="0.6" paint-order="stroke">15</text>
+  </g>
+  <g>
+    <ellipse cx="374" cy="310" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="374" cy="298" r="23" fill="#6CCB82"></circle>
+    <circle cx="374" cy="298" r="19.5" fill="#9BE0A8"></circle>
+    <ellipse cx="374" cy="291" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="374" y="299" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#6CCB82" stroke-width="0.6" paint-order="stroke">16</text>
+  </g>
+  <g>
+    <ellipse cx="450" cy="310" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="450" cy="298" r="23" fill="#A87EDB"></circle>
+    <circle cx="450" cy="298" r="19.5" fill="#C9A7EC"></circle>
+    <ellipse cx="450" cy="291" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="450" y="299" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#A87EDB" stroke-width="0.6" paint-order="stroke">17</text>
+  </g>
+  <g>
+    <ellipse cx="450" cy="234" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="450" cy="222" r="23" fill="#EE7B4D"></circle>
+    <circle cx="450" cy="222" r="19.5" fill="#F79B72"></circle>
+    <ellipse cx="450" cy="215" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="450" y="223" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#EE7B4D" stroke-width="0.6" paint-order="stroke">18</text>
+  </g>
+  <g>
+    <ellipse cx="374" cy="234" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="374" cy="222" r="23" fill="#E97FA6"></circle>
+    <circle cx="374" cy="222" r="19.5" fill="#F6A5C0"></circle>
+    <ellipse cx="374" cy="215" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="374" y="223" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#E97FA6" stroke-width="0.6" paint-order="stroke">19</text>
+  </g>
+  <g>
+    <ellipse cx="298" cy="234" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="298" cy="222" r="23" fill="#EFAE2E"></circle>
+    <circle cx="298" cy="222" r="19.5" fill="#FBC85A"></circle>
+    <ellipse cx="298" cy="215" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="298" y="223" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#EFAE2E" stroke-width="0.6" paint-order="stroke">20</text>
+  </g>
+  <g>
+    <ellipse cx="222" cy="234" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="222" cy="222" r="23" fill="#4FB0D8"></circle>
+    <circle cx="222" cy="222" r="19.5" fill="#7FCBE8"></circle>
+    <ellipse cx="222" cy="215" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="222" y="223" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#4FB0D8" stroke-width="0.6" paint-order="stroke">21</text>
+  </g>
+  <g>
+    <ellipse cx="146" cy="234" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="146" cy="222" r="23" fill="#6CCB82"></circle>
+    <circle cx="146" cy="222" r="19.5" fill="#9BE0A8"></circle>
+    <ellipse cx="146" cy="215" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="146" y="223" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#6CCB82" stroke-width="0.6" paint-order="stroke">22</text>
+  </g>
+  <g>
+    <ellipse cx="70" cy="234" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="70" cy="222" r="23" fill="#A87EDB"></circle>
+    <circle cx="70" cy="222" r="19.5" fill="#C9A7EC"></circle>
+    <ellipse cx="70" cy="215" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="70" y="223" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#A87EDB" stroke-width="0.6" paint-order="stroke">23</text>
+  </g>
+  <g>
+    <ellipse cx="70" cy="158" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="70" cy="146" r="23" fill="#EE7B4D"></circle>
+    <circle cx="70" cy="146" r="19.5" fill="#F79B72"></circle>
+    <ellipse cx="70" cy="139" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="70" y="147" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#EE7B4D" stroke-width="0.6" paint-order="stroke">24</text>
+  </g>
+  <g>
+    <ellipse cx="146" cy="158" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="146" cy="146" r="23" fill="#E97FA6"></circle>
+    <circle cx="146" cy="146" r="19.5" fill="#F6A5C0"></circle>
+    <ellipse cx="146" cy="139" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="146" y="147" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#E97FA6" stroke-width="0.6" paint-order="stroke">25</text>
+  </g>
+  <g>
+    <ellipse cx="222" cy="158" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="222" cy="146" r="23" fill="#EFAE2E"></circle>
+    <circle cx="222" cy="146" r="19.5" fill="#FBC85A"></circle>
+    <ellipse cx="222" cy="139" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="222" y="147" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#EFAE2E" stroke-width="0.6" paint-order="stroke">26</text>
+  </g>
+  <g>
+    <ellipse cx="298" cy="158" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="298" cy="146" r="23" fill="#4FB0D8"></circle>
+    <circle cx="298" cy="146" r="19.5" fill="#7FCBE8"></circle>
+    <ellipse cx="298" cy="139" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="298" y="147" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#4FB0D8" stroke-width="0.6" paint-order="stroke">27</text>
+  </g>
+  <g>
+    <ellipse cx="374" cy="158" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="374" cy="146" r="23" fill="#6CCB82"></circle>
+    <circle cx="374" cy="146" r="19.5" fill="#9BE0A8"></circle>
+    <ellipse cx="374" cy="139" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="374" y="147" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#6CCB82" stroke-width="0.6" paint-order="stroke">28</text>
+  </g>
+  <g>
+    <ellipse cx="450" cy="158" rx="23" ry="8" fill="#000" opacity="0.10"></ellipse>
+    <circle cx="450" cy="146" r="23" fill="#A87EDB"></circle>
+    <circle cx="450" cy="146" r="19.5" fill="#C9A7EC"></circle>
+    <ellipse cx="450" cy="139" rx="13" ry="9" fill="#fff" opacity="0.28"></ellipse>
+    <text x="450" y="147" text-anchor="middle" dominant-baseline="middle" font-family="&#39;Arial Rounded MT Bold&#39;,&#39;Trebuchet MS&#39;,sans-serif" font-weight="700" font-size="17" fill="#fff" stroke="#A87EDB" stroke-width="0.6" paint-order="stroke">29</text>
+  </g>
+  <g>
+    <ellipse cx="260" cy="83" rx="26" ry="9" fill="#000" opacity="0.12"></ellipse>
+    <circle cx="260" cy="70" r="26" fill="#E9B021"></circle>
+    <circle cx="260" cy="70" r="22" fill="#FAD34F"></circle>
+    <circle cx="260" cy="64" r="15" fill="#FCE491" opacity="0.6"></circle>
+    <path d="M260,57 L260,82 M251,67 L269,67" stroke="#fff" stroke-width="5.5" stroke-linecap="round"></path>
+    <path d="M260,57 L260,82 M251,67 L269,67" stroke="#C98A12" stroke-width="2.2" stroke-linecap="round" opacity="0.35"></path>
+  </g>
+  </g>
+</svg>`;
+let boardInjected=false;
+function injectBoard(){
+  const host=document.getElementById('boardSvg'); if(!host || boardInjected) return;
+  host.innerHTML=BOARD_SVG; boardInjected=true;
+  // make the svg fill the container responsively
+  const svg=host.querySelector('svg');
+  if(svg){ svg.setAttribute('width','100%'); svg.setAttribute('height','100%'); svg.style.display='block'; }
 }
-// cache loaded token face images so canvas can draw them
-const faceImgCache={};
-function getFaceImg(id){
-  const src=playerPhotos[id]; if(!src) return null;
-  if(faceImgCache[id] && faceImgCache[id]._src===src) return faceImgCache[id];
-  const im=new Image(); im._src=src; im.onload=()=>drawBoard(); im.src=src;
-  faceImgCache[id]=im; return im;
-}
-const CANDY=['#ff6b9d','#ffd23f','#7ad7f0','#9b8cff','#7be495','#ffa45c'];
 function drawBoard(){
-  const cv=document.getElementById('boardCanvas'); if(!cv) return;
-  const g=cv.getContext('2d'); g.clearRect(0,0,520,520);
-  // soft candy sky background
-  const bg=g.createLinearGradient(0,0,0,520); bg.addColorStop(0,'#fff0f8'); bg.addColorStop(1,'#eafaff');
-  g.fillStyle=bg; g.fillRect(0,0,520,520);
-  // connecting ribbon path (draw thick line through all spaces first)
-  g.beginPath();
-  for(let i=0;i<=BOARD_SPACES;i++){ const {x,y}=spaceXY(i); if(i===0) g.moveTo(x,y); else g.lineTo(x,y); }
-  g.lineWidth=20; g.strokeStyle='#ffffff'; g.lineCap='round'; g.lineJoin='round'; g.stroke();
-  g.lineWidth=12; g.strokeStyle='#ffe1f0'; g.stroke();
-  // candy spaces
-  for(let i=0;i<=BOARD_SPACES;i++){ const {x,y}=spaceXY(i);
-    g.beginPath(); g.arc(x,y,19,0,7);
-    if(i===0){ g.fillStyle='#7be495'; }
-    else if(i===BOARD_SPACES){ g.fillStyle='#ffd23f'; }
-    else { g.fillStyle=CANDY[i%CANDY.length]; }
-    g.fill(); g.lineWidth=3; g.strokeStyle='#fff'; g.stroke();
-    g.lineWidth=2; g.strokeStyle='#1d1b3a44'; g.stroke();
-    // label
-    g.fillStyle='#1d1b3a'; g.font='bold 11px Fredoka'; g.textAlign='center'; g.textBaseline='middle';
-    g.fillText(i===0?'START':i===BOARD_SPACES?'🏁':i, x, y);
-  }
-  // tokens = player photo circles hopping along
+  injectBoard();
+  const layer=document.getElementById('tokenLayer'); if(!layer) return;
+  layer.innerHTML='';
   const ids=Object.keys(racePos);
-  ids.forEach((id,k)=>{ const {x,y}=spaceXY(racePos[id]);
-    const ang=(k/Math.max(1,ids.length))*6.28; const ox=Math.cos(ang)*14, oy=Math.sin(ang)*14-20;
-    const tx=x+ox, ty=y+oy, R=16;
-    // ring
-    g.beginPath(); g.arc(tx,ty,R+2,0,7); g.fillStyle=CANDY[k%CANDY.length]; g.fill();
-    const img=getFaceImg(id);
-    if(img && img.complete && img.naturalWidth){
-      g.save(); g.beginPath(); g.arc(tx,ty,R,0,7); g.clip();
-      g.drawImage(img,tx-R,ty-R,R*2,R*2); g.restore();
-      g.beginPath(); g.arc(tx,ty,R,0,7); g.lineWidth=3; g.strokeStyle='#fff'; g.stroke();
-    } else {
-      // fallback: initial on a colored disc
-      g.beginPath(); g.arc(tx,ty,R,0,7); g.fillStyle='#fff'; g.fill();
-      g.lineWidth=3; g.strokeStyle=CANDY[k%CANDY.length]; g.stroke();
-      const nm=(players[id]&&players[id].name)?players[id].name[0].toUpperCase():'?';
-      g.fillStyle='#1d1b3a'; g.font='bold 16px Bungee'; g.textAlign='center'; g.textBaseline='middle';
-      g.fillText(nm,tx,ty);
-    }
+  ids.forEach((id,k)=>{
+    const n=Math.max(0,Math.min(30,racePos[id]||0));
+    const sp=SPACE_XY[n];
+    // small fan-out so overlapping tokens are visible
+    const ang=(k/Math.max(1,ids.length))*Math.PI*2;
+    const ox=Math.cos(ang)*16, oy=Math.sin(ang)*16-18;
+    const px=((sp.x+ox)/520)*100, py=((sp.y+oy)/520)*100;
+    const ring=['#ff6b9d','#ffd23f','#7ad7f0','#9b8cff','#7be495','#ffa45c'][k%6];
+    const tok=document.createElement('div');
+    tok.style.cssText='position:absolute;left:'+px+'%;top:'+py+'%;transform:translate(-50%,-50%);'+
+      'width:13%;height:13%;border-radius:50%;border:3px solid '+ring+';background:#fff;overflow:hidden;'+
+      'box-shadow:0 2px 6px rgba(0,0,0,.3);transition:left .5s ease,top .5s ease;display:flex;'+
+      'align-items:center;justify-content:center;font-family:Bungee;font-size:14px;color:#1d1b3a;';
+    const photo=playerPhotos[id];
+    if(photo){ const im=document.createElement('img'); im.src=photo;
+      im.style.cssText='width:100%;height:100%;object-fit:cover;'; tok.appendChild(im); }
+    else { tok.textContent=(players[id]&&players[id].name)?players[id].name[0].toUpperCase():'?'; }
+    layer.appendChild(tok);
   });
 }
 

@@ -70,7 +70,7 @@ io.on('connection', (socket) => {
     code = (code || '').toUpperCase().trim();
     const room = rooms[code];
     if (!room) { ack && ack({ ok: false, error: 'Room not found' }); return; }
-    if (Object.keys(room.players).length >= 6) {
+    if (Object.keys(room.players).length >= 20) {
       ack && ack({ ok: false, error: 'Room is full' }); return;
     }
     room.players[socket.id] = sanitize(player);

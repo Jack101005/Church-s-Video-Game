@@ -3,10 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Finish the Verse — A Bible Party Game (v14)</title>
+<title>Finish the Verse — A Bible Party Game (v16)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
   @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
+  /* ---- Bible Impostor ---- */
+  @keyframes impPop { 0%{transform:scale(.3);opacity:0;} 60%{transform:scale(1.12);opacity:1;} 100%{transform:scale(1);} }
+  @keyframes impShake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-6px);} 75%{transform:translateX(6px);} }
+  .impCard{border:5px solid var(--ink);border-radius:18px;padding:18px 14px;margin:10px 0;cursor:pointer;user-select:none;width:100%;}
+  .impCard.hidden{background:repeating-linear-gradient(45deg,#2b2850,#2b2850 12px,#36315f 12px,#36315f 24px);color:#fff;font-weight:700;}
+  .impCard.crew{background:#e9fbe4;}
+  .impCard.spy{background:#2a1020;color:#fff;animation:impShake .4s ease 2;}
+  .impCard.none{background:#f1eefc;cursor:default;}
+  .impStory{font-family:'Bungee';font-size:clamp(20px,6vw,30px);line-height:1.15;color:var(--brick);}
+  .impCard.spy .impStory{color:#ff5a7a;}
+  .impStoryVi{font-weight:700;font-size:clamp(15px,4.4vw,19px);margin-top:6px;}
+  .impCat{font-size:13px;font-weight:700;opacity:.8;margin-top:8px;}
+  .impHint{font-size:12px;font-weight:600;opacity:.7;margin-top:8px;}
+  .clueList{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:8px;}
+  .clueRow{display:flex;align-items:center;gap:10px;background:#fff;border:3px solid var(--ink);border-radius:12px;padding:7px 12px;font-weight:700;text-align:left;}
+  .clueRow.now{background:#fff3c4;}
+  .clueRow.sus{background:#ffe0e6;}
+  .clueRow .cw{margin-left:auto;font-family:'Bungee';color:var(--p2);font-size:clamp(13px,3.6vw,17px);text-align:right;}
+  .clueRow .cw.dim{opacity:.4;font-family:'Fredoka';}
+  .impAv{width:34px;height:34px;border-radius:50%;border:3px solid var(--ink);overflow:hidden;flex-shrink:0;display:flex;
+    align-items:center;justify-content:center;font-family:'Bungee';font-size:14px;background:var(--purple);color:#fff;}
+  .impAv img{width:100%;height:100%;object-fit:cover;}
+  .impAv.big{width:120px;height:120px;font-size:46px;margin:6px auto;border-width:5px;animation:impPop .7s cubic-bezier(.2,1.3,.4,1) both;}
+  .impBigName{font-family:'Bungee';font-size:clamp(28px,9vw,50px);color:var(--brick);animation:impPop .7s cubic-bezier(.2,1.3,.4,1) both;}
+  .impBar{height:10px;background:#e0465f;border-radius:6px;margin-top:3px;}
   /* ---- animated intro ---- */
   @keyframes introZoom { 0%{transform:scale(.3);opacity:0;} 55%{transform:scale(1.1);opacity:1;} 100%{transform:scale(1);opacity:1;} }
   @keyframes introUp { 0%{transform:translateY(40px);opacity:0;} 100%{transform:translateY(0);opacity:1;} }
@@ -149,6 +174,27 @@
       <p class="sub">Which game do you want to host?</p>
       <button class="big gold" onclick="pickGame('quiz')">📖 Finish the Verse<br><span style="font-size:13px;font-family:Fredoka;font-weight:600">Classic verse quiz</span></button>
       <button class="big alt" onclick="pickGame('race')">🏁 Journey Race<br><span style="font-size:13px;font-family:Fredoka;font-weight:600">Race across the board by answering!</span></button>
+      <button class="big" style="background:#e0465f;box-shadow:0 6px 0 #9c2238" onclick="pickGame('impostor')">🕵️ Bible Impostor<br><span style="font-size:13px;font-family:Fredoka;font-weight:600">Kẻ Giả Mạo: find who doesn't know the story!</span></button>
+    </div>
+  </div>
+
+  <!-- BIBLE IMPOSTOR: host / big screen -->
+  <div class="screen" id="impScreen">
+    <div class="card">
+      <div class="qbig" id="impTitle">Bible Impostor</div>
+      <div class="timer" id="impTimer" style="display:none">30</div>
+      <div id="impMain"></div>
+      <div class="clueList" id="impList"></div>
+      <div id="impBtns" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- BIBLE IMPOSTOR: player phone -->
+  <div class="screen" id="impPhone">
+    <div class="card">
+      <div class="qbig" id="impPTitle">Bible Impostor</div>
+      <div class="impCard hidden" id="impCard" onclick="toggleImpCard()"></div>
+      <div id="impPMain"></div>
     </div>
   </div>
 
@@ -1056,6 +1102,7 @@ let raceActive=false, racePos={}, raceOrder=[], raceRoundIdx=0, raceCurQ=null, r
 function hostStartSelected(){
   if(!isHost) return;
   if(gameType==='race') hostStartRace();
+  else if(gameType==='impostor') hostStartImpostor();
   else hostStartGame();
 }
 
@@ -1543,11 +1590,19 @@ function raceResolve(){
     status.innerHTML='🏆 <b>'+esc(winner.name)+'</b> reached the finish! Well done!';
     socket.emit('hostEvent',{ t:'raceWin', name:winner.name, positions:racePos });
     raceActive=false;
+    // offer the heartfelt closing message (same one as the quiz game)
+    const btn=document.getElementById('raceNextBtn');
+    btn.textContent='Show Closing Message 🌙';
+    btn.style.display='inline-block';
+    btn.onclick=function(){ hostClosing(); };
   } else {
     const summary=moved.map(m=>esc(m.name)+' '+(m.step>0?('+'+m.step):m.step===-1?'−1':'0')).join(' · ');
     status.textContent=summary;
     raceRoundIdx++;
-    document.getElementById('raceNextBtn').style.display='inline-block';
+    const btn=document.getElementById('raceNextBtn');
+    btn.textContent='Next Question ▶';
+    btn.onclick=function(){ raceNextTurn(); };
+    btn.style.display='inline-block';
   }
 }
 
@@ -1623,6 +1678,448 @@ socket.on('input',({id,state})=>{
     if(joiners.length>0 && Object.keys(raceAnswers).length>=joiners.length){
       clearInterval(raceTimerInt); setTimeout(raceResolve,400);
     }
+  }
+});
+
+/* ============================================================================
+   BIBLE IMPOSTOR (Kẻ Giả Mạo) — social deduction, lag-proof.
+   Host is the MC / big screen. Every player gets a secret Bible story on their
+   phone except one IMPOSTOR. Players give one-word clues in turn, then vote.
+   If the impostor is caught they get one last guess at the story to steal points.
+   Uses only the existing relays: host -> all ('hostEvent'), player -> host ('input').
+   ============================================================================ */
+const STORIES = [
+  {en:"David and Goliath", vi:"Đa-vít và Gô-li-át", ref:"1 Samuel 17", cat:"OT"},
+  {en:"Noah's Ark", vi:"Con tàu của Nô-ê", ref:"Genesis 6-9", cat:"OT"},
+  {en:"Moses parts the Red Sea", vi:"Môi-se rẽ Biển Đỏ", ref:"Exodus 14", cat:"OT"},
+  {en:"Jonah and the big fish", vi:"Giô-na và con cá lớn", ref:"Jonah 1-2", cat:"OT"},
+  {en:"Daniel in the lions' den", vi:"Đa-ni-ên trong hang sư tử", ref:"Daniel 6", cat:"OT"},
+  {en:"Creation in six days", vi:"Đức Chúa Trời sáng tạo trời đất", ref:"Genesis 1", cat:"OT"},
+  {en:"Adam, Eve and the forbidden fruit", vi:"A-đam, Ê-va và trái cấm", ref:"Genesis 3", cat:"OT"},
+  {en:"The Tower of Babel", vi:"Tháp Ba-bên", ref:"Genesis 11", cat:"OT"},
+  {en:"Joseph's colorful coat", vi:"Áo nhiều màu của Giô-sép", ref:"Genesis 37", cat:"OT"},
+  {en:"The walls of Jericho fall", vi:"Tường thành Giê-ri-cô sụp đổ", ref:"Joshua 6", cat:"OT"},
+  {en:"Three friends in the fiery furnace", vi:"Ba người bạn trong lò lửa", ref:"Daniel 3", cat:"OT"},
+  {en:"Elijah and fire from heaven", vi:"Ê-li và lửa từ trời", ref:"1 Kings 18", cat:"OT"},
+  {en:"Moses and the burning bush", vi:"Môi-se và bụi gai cháy", ref:"Exodus 3", cat:"OT"},
+  {en:"Abraham and the promise of stars", vi:"Áp-ra-ham và lời hứa như sao trên trời", ref:"Genesis 15", cat:"OT"},
+  {en:"Queen Esther saves her people", vi:"Hoàng hậu Ê-xơ-tê cứu dân tộc", ref:"Esther 4-7", cat:"OT"},
+  {en:"Jesus is born in a manger", vi:"Chúa Giê-xu giáng sinh trong máng cỏ", ref:"Luke 2", cat:"NT"},
+  {en:"Jesus walks on water", vi:"Chúa Giê-xu đi trên mặt nước", ref:"Matthew 14", cat:"NT"},
+  {en:"Five loaves and two fish", vi:"Năm cái bánh và hai con cá", ref:"John 6", cat:"NT"},
+  {en:"Water turned into wine", vi:"Hóa nước thành rượu", ref:"John 2", cat:"NT"},
+  {en:"Jesus calms the storm", vi:"Chúa Giê-xu dẹp yên bão tố", ref:"Mark 4", cat:"NT"},
+  {en:"Lazarus is raised from the dead", vi:"La-xa-rơ sống lại", ref:"John 11", cat:"NT"},
+  {en:"Zacchaeus climbs a tree", vi:"Xa-chê trèo lên cây", ref:"Luke 19", cat:"NT"},
+  {en:"The Last Supper", vi:"Bữa Tiệc Ly", ref:"Luke 22", cat:"NT"},
+  {en:"The empty tomb", vi:"Ngôi mộ trống", ref:"Matthew 28", cat:"NT"},
+  {en:"Paul on the road to Damascus", vi:"Phao-lô trên đường đến Đa-mách", ref:"Acts 9", cat:"NT"},
+  {en:"Pentecost and tongues of fire", vi:"Lễ Ngũ Tuần và những lưỡi lửa", ref:"Acts 2", cat:"NT"},
+  {en:"Jesus washes the disciples' feet", vi:"Chúa Giê-xu rửa chân cho môn đồ", ref:"John 13", cat:"NT"},
+  {en:"The Prodigal Son", vi:"Đứa con hoang đàng", ref:"Luke 15", cat:"PAR"},
+  {en:"The Good Samaritan", vi:"Người Sa-ma-ri nhân lành", ref:"Luke 10", cat:"PAR"},
+  {en:"The Lost Sheep", vi:"Con chiên lạc", ref:"Luke 15", cat:"PAR"},
+  {en:"The Sower and the seeds", vi:"Người gieo giống", ref:"Matthew 13", cat:"PAR"},
+  {en:"The house built on the rock", vi:"Nhà xây trên đá", ref:"Matthew 7", cat:"PAR"},
+  {en:"The mustard seed", vi:"Hột cải", ref:"Matthew 13", cat:"PAR"},
+  {en:"The parable of the talents", vi:"Ẩn dụ về những ta-lâng", ref:"Matthew 25", cat:"PAR"},
+];
+const IMP_CAT = {
+  OT:"Old Testament story · Câu chuyện Cựu Ước",
+  NT:"New Testament story · Câu chuyện Tân Ước",
+  PAR:"A parable of Jesus · Ẩn dụ của Chúa Giê-xu",
+};
+const IMP_CLUE_SEC=30, IMP_VOTE_SEC=40, IMP_GUESS_SEC=25;
+let imp={active:false, round:0, used:[], story:-1, impostor:null, impostorName:'', lastImp:null,
+  order:[], turn:0, clues:[], votes:{}, phase:'', pass:1, waitingFor:null, caught:false, guessOptions:[]};
+let impTimerInt=null, impTimeLeft=0;
+
+const pname = id => (players[id] && players[id].name) ? players[id].name : '?';
+function impAvatar(id, big){
+  const photo = (typeof playerPhotos!=='undefined') ? playerPhotos[id] : null;
+  const inner = photo ? '<img src="'+photo+'">' : esc((pname(id)[0]||'?').toUpperCase());
+  return '<div class="impAv'+(big?' big':'')+'">'+inner+'</div>';
+}
+function impParticipants(){ return imp.order.filter(id=>players[id]); }
+
+/* ---------- host: small screen helpers ---------- */
+function setImpTitle(t){ document.getElementById('impTitle').textContent=t; }
+function impMain(html){ document.getElementById('impMain').innerHTML=html; }
+function impListHTML(html){ document.getElementById('impList').innerHTML=html; }
+function impButtons(list){
+  const box=document.getElementById('impBtns'); box.innerHTML='';
+  list.forEach(([label,cls,fn])=>{ const b=document.createElement('button');
+    b.className='big '+cls; b.textContent=label; b.onclick=fn; box.appendChild(b); });
+}
+function startImpTimer(sec, onEnd){
+  const el=document.getElementById('impTimer');
+  impTimeLeft=sec; el.style.display='block'; el.textContent=sec; el.classList.remove('low');
+  clearInterval(impTimerInt);
+  impTimerInt=setInterval(()=>{ impTimeLeft--; el.textContent=Math.max(0,impTimeLeft);
+    el.classList.toggle('low', impTimeLeft<=5);
+    if(impTimeLeft<=0){ clearInterval(impTimerInt); onEnd(); } },1000);
+}
+function stopImpTimer(){ clearInterval(impTimerInt); document.getElementById('impTimer').style.display='none'; }
+
+/* a little drumroll + chord on the big screen for the reveal */
+function impDrumroll(){
+  try{ if(typeof Tone==='undefined') return;
+    const n=new Tone.NoiseSynth({noise:{type:'white'},envelope:{attack:0.001,decay:0.05,sustain:0}}).toDestination();
+    n.volume.value=-20;
+    const s=new Tone.PolySynth(Tone.Synth,{envelope:{attack:0.01,decay:0.4,sustain:0.3,release:1.2}}).toDestination();
+    s.volume.value=-12;
+    const now=Tone.now();
+    for(let i=0;i<24;i++) n.triggerAttackRelease('32n', now+i*0.06);
+    s.triggerAttackRelease(['C4','E4','G4','C5'],'2n', now+1.5);
+    setTimeout(()=>{ try{ n.dispose(); s.dispose(); }catch(e){} }, 4500);
+  }catch(e){}
+}
+
+/* ---------- host: game flow ---------- */
+function hostStartImpostor(){
+  if(!isHost) return;
+  const joiners=Object.keys(players).filter(id=>id!==myId);
+  if(joiners.length<2){ alert('Need at least 2 players to start (best with 4 or more).'); return; }
+  scores={}; joiners.forEach(id=>scores[id]=0);
+  imp.active=true; imp.round=0; imp.used=[]; imp.lastImp=null;
+  impNewRound();
+}
+function impNewRound(){
+  const joiners=Object.keys(players).filter(id=>id!==myId);
+  if(joiners.length<2){ alert('Need at least 2 players for a round.'); return; }
+  joiners.forEach(id=>{ if(!(id in scores)) scores[id]=0; });
+  imp.round++;
+  if(imp.used.length>=STORIES.length) imp.used=[];
+  let s; do{ s=Math.floor(Math.random()*STORIES.length); }while(imp.used.includes(s));
+  imp.used.push(s); imp.story=s;
+  let pool=joiners.filter(id=>id!==imp.lastImp); if(!pool.length) pool=joiners;
+  imp.impostor=pool[Math.floor(Math.random()*pool.length)];
+  imp.impostorName=pname(imp.impostor); imp.lastImp=imp.impostor;
+  imp.order=shuffle(joiners); imp.turn=0; imp.clues=[]; imp.votes={}; imp.pass=1;
+  imp.waitingFor=null; imp.caught=false; imp.guessOptions=[];
+  const roles={}; joiners.forEach(id=>roles[id]=(id===imp.impostor)?-1:s);
+  socket.emit('hostEvent',{ t:'impRole', round:imp.round, cat:STORIES[s].cat, roles });
+  imp.phase='read';
+  show('impScreen'); stopImpTimer();
+  setImpTitle('Round '+imp.round+' · Check your phone 🤫');
+  impMain('<div class="big-emoji">🕵️</div>'+
+    '<p class="sub">Everyone, secretly peek at your card.<br>One of you is the <b>IMPOSTOR</b> and has no idea what the story is!</p>'+
+    '<div class="impCat" style="font-size:15px">'+esc(IMP_CAT[STORIES[s].cat])+'</div>'+
+    '<p class="impHint">Clue order: '+imp.order.map(id=>esc(pname(id))).join(' → ')+'</p>');
+  impListHTML('');
+  impButtons([['Start Clues ▶','gold',impStartClues]]);
+}
+function impStartClues(){ imp.phase='clue'; imp.turn=0; impNextTurn(); }
+function impNextTurn(){
+  while(imp.turn<imp.order.length && !players[imp.order[imp.turn]]) imp.turn++;
+  if(imp.turn>=imp.order.length){ impCluesDone(); return; }
+  const id=imp.order[imp.turn];
+  imp.waitingFor=id;
+  socket.emit('hostEvent',{ t:'impTurn', round:imp.round, turnId:id, turnName:pname(id),
+    clues:imp.clues, pass:imp.pass, seconds:IMP_CLUE_SEC });
+  setImpTitle('Round '+imp.round+' · Clue time'+(imp.pass>1?' (round '+imp.pass+')':''));
+  impMain('<p class="sub">🎤 <b>'+esc(pname(id))+'</b>, give ONE word about the story!<br>'+
+    '<span style="font-size:13px">Don\'t say the name. Don\'t make it too easy for the impostor 😏</span></p>');
+  renderHostClues(id);
+  impButtons([]);
+  startImpTimer(IMP_CLUE_SEC, ()=>impAcceptClue(id,'(no clue ⏰)'));
+}
+function impAcceptClue(id, clue){
+  if(imp.phase!=='clue' || imp.waitingFor!==id) return;
+  imp.waitingFor=null; stopImpTimer();
+  imp.clues.push({ id, name:pname(id), clue, pass:imp.pass });
+  imp.turn++;
+  renderHostClues(null);
+  setTimeout(impNextTurn, 1100);   // a beat so the room sees the clue land
+}
+function renderHostClues(currentId){
+  const rows=imp.order.filter(id=>players[id]||imp.clues.some(c=>c.id===id)).map(id=>{
+    const mine=imp.clues.filter(c=>c.id===id).map(c=>esc(c.clue));
+    const txt = mine.length ? mine.join(' · ') : (id===currentId ? '🎤 thinking…' : '…');
+    return '<div class="clueRow'+(id===currentId?' now':'')+'">'+impAvatar(id)+'<span>'+esc(pname(id))+'</span>'+
+      '<span class="cw'+(mine.length?'':' dim')+'">'+txt+'</span></div>';
+  });
+  impListHTML(rows.join(''));
+}
+function impCluesDone(){
+  imp.phase='cluesDone'; imp.waitingFor=null; stopImpTimer();
+  socket.emit('hostEvent',{ t:'impCluesDone', round:imp.round, clues:imp.clues });
+  setImpTitle('All clues are in! 🤔');
+  impMain('<p class="sub">Talk it over! Whose clue sounded a little… off?</p>');
+  renderHostClues(null);
+  impButtons([['Vote Now 🗳️','gold',impStartVote],
+    ['One More Clue Round 🔁','alt',()=>{ imp.pass++; imp.turn=0; imp.phase='clue'; impNextTurn(); }]]);
+}
+function impStartVote(){
+  imp.phase='vote'; imp.votes={};
+  const cands=impParticipants().map(id=>({ id, name:pname(id) }));
+  socket.emit('hostEvent',{ t:'impVote', round:imp.round, candidates:cands, clues:imp.clues, seconds:IMP_VOTE_SEC });
+  setImpTitle('Who is the Impostor? 🗳️');
+  impMain('<p class="sub">Vote on your phone!</p>');
+  renderVoteStatus();
+  impButtons([]);
+  startImpTimer(IMP_VOTE_SEC, impVotesDone);
+}
+function renderVoteStatus(){
+  impListHTML(impParticipants().map(id=>'<div class="clueRow">'+impAvatar(id)+'<span>'+esc(pname(id))+'</span>'+
+    '<span class="cw'+(imp.votes[id]?'':' dim')+'">'+(imp.votes[id]?'voted ✓':'…')+'</span></div>').join(''));
+}
+function impTally(){
+  const counts={};
+  Object.entries(imp.votes).forEach(([voter,target])=>{ (counts[target]=counts[target]||[]).push(voter); });
+  return counts;
+}
+function impVotesDone(){
+  if(imp.phase!=='vote') return;
+  imp.phase='votesIn'; stopImpTimer();
+  socket.emit('hostEvent',{ t:'impVotesIn', round:imp.round });
+  const counts=impTally();
+  const total=Math.max(1,Object.keys(imp.votes).length);
+  const rows=impParticipants().map(id=>({ id, by:counts[id]||[] })).sort((a,b)=>b.by.length-a.by.length);
+  setImpTitle('The votes are in! 😬');
+  impMain('<p class="sub">Who did you all point at?</p>');
+  impListHTML(rows.map(r=>'<div class="clueRow" style="flex-wrap:wrap">'+impAvatar(r.id)+'<span>'+esc(pname(r.id))+'</span>'+
+    '<span class="cw">'+r.by.length+' vote'+(r.by.length===1?'':'s')+'</span>'+
+    '<div style="width:100%;font-size:12px;opacity:.75">'+(r.by.length?('by '+r.by.map(v=>esc(pname(v))).join(', ')):'&nbsp;')+'</div>'+
+    '<div class="impBar" style="width:'+Math.round(100*r.by.length/total)+'%"></div></div>').join(''));
+  impButtons([['Reveal the Impostor 🎭','gold',impReveal]]);
+}
+function impReveal(){
+  if(imp.phase!=='votesIn') return;
+  imp.phase='revealing';
+  impButtons([]);
+  const counts=impTally();
+  let max=0; Object.values(counts).forEach(v=>{ if(v.length>max) max=v.length; });
+  const top=Object.keys(counts).filter(id=>counts[id].length===max);
+  imp.caught = max>0 && top.length===1 && top[0]===imp.impostor;
+  setImpTitle('🥁 The impostor is…');
+  impMain('<div class="big-emoji" style="font-size:70px">🥁</div>');
+  impListHTML('');
+  impDrumroll();
+  setTimeout(()=>{
+    socket.emit('hostEvent',{ t:'impReveal', round:imp.round, impostorId:imp.impostor,
+      impostorName:imp.impostorName, caught:imp.caught });
+    setImpTitle(imp.caught ? 'CAUGHT! 🎯' : 'The impostor ESCAPED! 😈');
+    impMain(impAvatar(imp.impostor,true)+'<div class="impBigName">'+esc(imp.impostorName)+'</div>'+
+      '<p class="sub">'+(imp.caught
+        ? 'was the impostor! …but they get ONE last chance to guess the story 😱'
+        : 'was the impostor, and nobody caught them!')+'</p>');
+    if(imp.caught && players[imp.impostor]){
+      setTimeout(impStartGuess, 2600);
+    } else {
+      setTimeout(()=>impFinishRound(null), 3200);
+    }
+  }, 1600);
+}
+function impStartGuess(){
+  const s=STORIES[imp.story];
+  const same=shuffle(STORIES.map((x,i)=>i).filter(i=>i!==imp.story && STORIES[i].cat===s.cat));
+  const other=shuffle(STORIES.map((x,i)=>i).filter(i=>i!==imp.story && STORIES[i].cat!==s.cat));
+  imp.guessOptions=shuffle([imp.story].concat(same.concat(other).slice(0,5)));
+  imp.phase='guess';
+  socket.emit('hostEvent',{ t:'impGuess', round:imp.round, impostorId:imp.impostor,
+    impostorName:imp.impostorName, options:imp.guessOptions, seconds:IMP_GUESS_SEC });
+  setImpTitle(imp.impostorName+' is guessing the story… 🤞');
+  impMain(impAvatar(imp.impostor,true)+'<p class="sub">If they guess right, they steal the points!</p>');
+  impListHTML(imp.guessOptions.map(i=>'<div class="clueRow"><span>'+esc(STORIES[i].en)+'</span>'+
+    '<span class="cw dim" style="font-size:13px">'+esc(STORIES[i].vi)+'</span></div>').join(''));
+  startImpTimer(IMP_GUESS_SEC, ()=>impFinishRound(null));
+}
+function impFinishRound(guessIdx){
+  if(imp.phase==='result') return;
+  imp.phase='result'; stopImpTimer();
+  const s=STORIES[imp.story];
+  const guessedRight = imp.caught && guessIdx===imp.story;
+  const gains={};
+  imp.order.forEach(id=>{
+    let g=0;
+    if(id!==imp.impostor && imp.votes[id]===imp.impostor) g+=100;
+    if(id===imp.impostor){ if(!imp.caught) g+=300; else if(guessedRight) g+=200; }
+    gains[id]=g; scores[id]=(scores[id]||0)+g;
+  });
+  const outcome = !imp.caught ? 'The impostor fooled everyone! 😈'
+    : guessedRight ? 'Caught… but they GUESSED the story! 🤯'
+    : 'The crew wins! The impostor is exposed! 🎉';
+  const sb=scoreboard();
+  socket.emit('hostEvent',{ t:'impResult', round:imp.round, story:imp.story, impostorId:imp.impostor,
+    impostorName:imp.impostorName, caught:imp.caught, guessedRight, guessIdx, outcome, gains, scores:sb });
+  setImpTitle('Round '+imp.round+' result');
+  impMain('<p class="sub" style="margin-bottom:4px">The story was</p>'+
+    '<div class="impStory">'+esc(s.en)+'</div><div class="impStoryVi">'+esc(s.vi)+'</div>'+
+    '<div class="ref">'+esc(s.ref)+'</div>'+
+    '<p class="sub" style="margin-top:12px">'+outcome+'</p>'+
+    (imp.caught && guessIdx!==null && !guessedRight ? '<p class="impHint">'+esc(imp.impostorName)+' guessed "'+esc(STORIES[guessIdx].en)+'"</p>' : ''));
+  impListHTML(sb.map((r,i)=>'<div class="clueRow'+(r.id===imp.impostor?' sus':'')+'"><span style="font-family:Bungee;color:var(--brick)">'+(i+1)+'</span>'+
+    impAvatar(r.id)+'<span>'+esc(r.name)+(r.id===imp.impostor?' 🕵️':'')+'</span>'+
+    '<span class="cw">'+r.score+(gains[r.id]?' <span style="color:var(--p3);font-size:12px">+'+gains[r.id]+'</span>':'')+'</span></div>').join(''));
+  impButtons([['Next Round ▶','gold',impNewRound],['Final Scores 🏆','alt',impFinal]]);
+}
+function impFinal(){
+  imp.active=false; imp.phase=''; stopImpTimer();
+  socket.emit('hostEvent',{ t:'final', scores:scoreboard(), photos:playerPhotos });
+  showFinal(scoreboard(), playerPhotos);
+}
+
+/* host collects clues, votes and the impostor's guess */
+socket.on('input',({id,state})=>{
+  if(!isHost || !imp.active || !state) return;
+  if(state.round!==imp.round) return;   // ignore stale taps from an older round
+  if(state.t==='impClue'){
+    const clue=String(state.clue||'').trim().slice(0,24);
+    if(clue) impAcceptClue(id, clue);
+  }
+  else if(state.t==='impVoteCast' && imp.phase==='vote'){
+    const voters=impParticipants();
+    if(!voters.includes(id) || imp.votes[id]) return;
+    if(!voters.includes(state.target) || state.target===id) return;
+    imp.votes[id]=state.target;
+    renderVoteStatus();
+    if(voters.every(v=>imp.votes[v])) setTimeout(impVotesDone, 600);
+  }
+  else if(state.t==='impGuessPick' && imp.phase==='guess' && id===imp.impostor){
+    const g=Number(state.idx);
+    if(imp.guessOptions.includes(g)) impFinishRound(g);
+  }
+});
+
+/* if someone leaves mid-round, don't make everyone wait for the timer */
+socket.on('playerList',()=>{
+  if(!isHost || !imp.active) return;
+  setTimeout(()=>{
+    if(imp.phase==='clue' && imp.waitingFor && !players[imp.waitingFor]) impAcceptClue(imp.waitingFor,'(left the game)');
+    if(imp.phase==='vote'){ const v=impParticipants(); renderVoteStatus(); if(v.length && v.every(x=>imp.votes[x])) impVotesDone(); }
+  },50);
+});
+
+/* ---------- player phone side ---------- */
+let impMyRole=null, impRoundJ=0, impCatJ='OT', impCardOpen=false, impPTimer=null, impSent=false;
+function impPMain(html){ document.getElementById('impPMain').innerHTML=html; }
+function impPhoneTitle(t){ document.getElementById('impPTitle').textContent=t; }
+function renderImpCard(){
+  const c=document.getElementById('impCard');
+  c.style.display='';
+  if(impMyRole===null){ c.className='impCard none'; c.innerHTML='<b>You are watching this round 👀</b><div class="impHint">You will get a card next round.</div>'; return; }
+  if(!impCardOpen){ c.className='impCard hidden'; c.innerHTML='👆 Tap to peek at your secret card<div class="impHint" style="color:#fff">Hide it from your neighbours!</div>'; return; }
+  if(impMyRole===-1){
+    c.className='impCard spy';
+    c.innerHTML='<div class="impStory">🕵️ YOU ARE THE IMPOSTOR</div>'+
+      '<div class="impStoryVi">Bạn là kẻ giả mạo! You don\'t know the story.</div>'+
+      '<div class="impCat">Hint: '+esc(IMP_CAT[impCatJ])+'</div>'+
+      '<div class="impHint">Listen to the clues and blend in. Tap to hide.</div>';
+  } else {
+    const s=STORIES[impMyRole];
+    c.className='impCard crew';
+    c.innerHTML='<div style="font-weight:700;font-size:13px">Your secret story</div>'+
+      '<div class="impStory">'+esc(s.en)+'</div><div class="impStoryVi">'+esc(s.vi)+'</div>'+
+      '<div class="impCat">'+esc(s.ref)+'</div>'+
+      '<div class="impHint">Give clues without saying the name. Tap to hide.</div>';
+  }
+}
+function toggleImpCard(){ if(impMyRole===null) return; impCardOpen=!impCardOpen; renderImpCard(); }
+function impClueListHTML(clues){
+  if(!clues || !clues.length) return '';
+  return '<div class="clueList">'+clues.map(c=>'<div class="clueRow"><span>'+esc(c.name)+'</span><span class="cw">'+esc(c.clue)+'</span></div>').join('')+'</div>';
+}
+function impPhoneCountdown(sec){
+  clearInterval(impPTimer);
+  let left=sec; const tick=()=>{ const el=document.getElementById('impPCount'); if(!el){ clearInterval(impPTimer); return; }
+    el.textContent='⏱ '+Math.max(0,left)+'s'; left--; if(left<0) clearInterval(impPTimer); };
+  tick(); impPTimer=setInterval(tick,1000);
+}
+function impSendClue(){
+  if(impSent) return;
+  const inp=document.getElementById('impClueInput'); if(!inp) return;
+  const v=inp.value.trim(); if(!v){ inp.focus(); return; }
+  impSent=true; clearInterval(impPTimer);
+  socket.emit('input',{ t:'impClue', round:impRoundJ, clue:v.slice(0,24) });
+  impPMain('<div class="waiting">Clue sent: <b>'+esc(v)+'</b> ✓</div>');
+}
+socket.on('hostEvent',(evt)=>{
+  if(isHost || !evt || typeof evt.t!=='string' || evt.t.indexOf('imp')!==0) return;
+  if(evt.t!=='impRole' && evt.round!==impRoundJ) return;
+  clearInterval(impPTimer);
+  if(evt.t==='impRole'){
+    impRoundJ=evt.round; impCatJ=evt.cat; impCardOpen=false;
+    impMyRole = (evt.roles && myId in evt.roles) ? evt.roles[myId] : null;
+    show('impPhone'); impPhoneTitle('Round '+evt.round+' · Bible Impostor');
+    renderImpCard();
+    impPMain(impMyRole===null ? '' : '<div class="waiting">Peek at your card, then hide it 🤫<br>Waiting for clues to start…</div>');
+  }
+  else if(evt.t==='impTurn'){
+    show('impPhone');
+    if(evt.turnId===myId){
+      impSent=false;
+      impPhoneTitle('YOUR TURN! 🎤');
+      impPMain('<p class="sub" style="margin-bottom:4px">Type ONE word about the story</p>'+
+        '<input class="txt" id="impClueInput" maxlength="24" placeholder="one word, not the name!" autocomplete="off">'+
+        '<button class="big gold" onclick="impSendClue()">Send Clue ▶</button>'+
+        '<div class="waiting" id="impPCount"></div>'+impClueListHTML(evt.clues));
+      const inp=document.getElementById('impClueInput');
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter') impSendClue(); });
+      setTimeout(()=>inp.focus(),100);
+      impPhoneCountdown(evt.seconds||30);
+    } else {
+      impPhoneTitle('Round '+evt.round+' · Clues');
+      impPMain('<div class="waiting">🎤 <b>'+esc(evt.turnName)+'</b> is giving a clue…</div>'+impClueListHTML(evt.clues));
+    }
+  }
+  else if(evt.t==='impCluesDone'){
+    impPhoneTitle('All clues are in! 🤔');
+    impPMain('<div class="waiting">Discuss! Who sounds suspicious?</div>'+impClueListHTML(evt.clues));
+  }
+  else if(evt.t==='impVote'){
+    impPhoneTitle('Who is the Impostor? 🗳️');
+    const amIn = impMyRole!==null && evt.candidates.some(c=>c.id===myId);
+    if(!amIn){ impPMain('<div class="waiting">Watching the vote 👀</div>'); return; }
+    const box=document.getElementById('impPMain'); box.innerHTML='<div class="waiting" id="impPCount"></div>';
+    evt.candidates.filter(c=>c.id!==myId).forEach(c=>{
+      const b=document.createElement('button'); b.className='big alt'; b.textContent=c.name;
+      b.onclick=()=>{ socket.emit('input',{ t:'impVoteCast', round:impRoundJ, target:c.id });
+        impPMain('<div class="waiting">You voted for <b>'+esc(c.name)+'</b> ✓<br>Waiting for everyone…</div>'); };
+      box.appendChild(b);
+    });
+    box.insertAdjacentHTML('beforeend', impClueListHTML(evt.clues));
+    impPhoneCountdown(evt.seconds||40);
+  }
+  else if(evt.t==='impVotesIn'){
+    impPhoneTitle('Votes are in! 😬');
+    impPMain('<div class="waiting">Look at the big screen 👀</div>');
+  }
+  else if(evt.t==='impReveal'){
+    const me = evt.impostorId===myId;
+    impPhoneTitle(evt.caught ? 'CAUGHT! 🎯' : 'ESCAPED! 😈');
+    impPMain('<div class="impBigName">'+(me?'YOU':esc(evt.impostorName))+'</div><p class="sub">'+
+      (me ? (evt.caught ? 'They caught you! 😱 Get ready to guess the story…' : 'You fooled everyone! 😈')
+          : (evt.caught ? 'was the impostor! Now they get one guess…' : 'was the impostor and got away!'))+'</p>');
+  }
+  else if(evt.t==='impGuess'){
+    if(evt.impostorId!==myId){
+      impPhoneTitle('Last chance… 🤞');
+      impPMain('<div class="waiting"><b>'+esc(evt.impostorName)+'</b> is guessing the story…</div>');
+      return;
+    }
+    impPhoneTitle('Guess the story to steal points!');
+    document.getElementById('impCard').style.display='none';
+    const box=document.getElementById('impPMain'); box.innerHTML='<div class="waiting" id="impPCount"></div>';
+    evt.options.forEach(i=>{
+      const b=document.createElement('button'); b.className='big alt';
+      b.innerHTML=esc(STORIES[i].en)+'<br><span style="font-size:12px;font-family:Fredoka;font-weight:600">'+esc(STORIES[i].vi)+'</span>';
+      b.onclick=()=>{ socket.emit('input',{ t:'impGuessPick', round:impRoundJ, idx:i });
+        impPMain('<div class="waiting">Locked in: <b>'+esc(STORIES[i].en)+'</b> 🤞</div>'); };
+      box.appendChild(b);
+    });
+    impPhoneCountdown(evt.seconds||25);
+  }
+  else if(evt.t==='impResult'){
+    const s=STORIES[evt.story];
+    const mine=(evt.gains||{})[myId]||0;
+    impMyRole=evt.story; impCardOpen=true; renderImpCard();
+    impPhoneTitle('Round '+evt.round+' result');
+    impPMain('<p class="sub">'+esc(evt.outcome)+'</p>'+
+      '<div class="ref">'+esc(s.ref)+'</div>'+
+      '<div class="reveal" style="margin:8px 0">'+(mine?('+'+mine):'+0')+'</div>'+
+      '<div class="clueList">'+(evt.scores||[]).slice(0,5).map((r,i)=>'<div class="clueRow"><span>'+(i+1)+'. '+esc(r.name)+'</span><span class="cw">'+r.score+'</span></div>').join('')+'</div>'+
+      '<div class="waiting">Waiting for the host…</div>');
   }
 });
 

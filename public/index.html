@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Finish the Verse — A Bible Party Game (v16)</title>
+<title>Finish the Verse — A Bible Party Game (v17)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@500;600;700&display=swap');
   @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
@@ -32,6 +32,23 @@
   .impAv.big{width:120px;height:120px;font-size:46px;margin:6px auto;border-width:5px;animation:impPop .7s cubic-bezier(.2,1.3,.4,1) both;}
   .impBigName{font-family:'Bungee';font-size:clamp(28px,9vw,50px);color:var(--brick);animation:impPop .7s cubic-bezier(.2,1.3,.4,1) both;}
   .impBar{height:10px;background:#e0465f;border-radius:6px;margin-top:3px;}
+  /* ---- Draw & Guess ---- */
+  @keyframes drIn { 0%{transform:translateY(14px);opacity:0;} 100%{transform:none;opacity:1;} }
+  .drCanvas{width:100%;max-width:340px;aspect-ratio:1/1;background:#fff;border:4px solid var(--ink);border-radius:14px;
+    touch-action:none;display:block;margin:8px auto;cursor:crosshair;}
+  .drImg{width:100%;max-width:440px;aspect-ratio:1/1;background:#fff;border:5px solid var(--ink);border-radius:16px;
+    display:block;margin:8px auto;object-fit:contain;}
+  .drImg.small{max-width:240px;border-width:4px;}
+  .drTools{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;align-items:center;margin:6px 0;}
+  .drSw{width:32px;height:32px;border-radius:50%;border:3px solid var(--ink);cursor:pointer;padding:0;}
+  .drSw.on{outline:4px solid var(--gold);outline-offset:1px;}
+  .drTool{font-family:'Fredoka';font-weight:700;font-size:14px;border:3px solid var(--ink);border-radius:10px;
+    background:#fff;padding:6px 11px;cursor:pointer;color:var(--ink);}
+  .drTool.on{background:var(--gold);}
+  .drPrompt{font-family:'Bungee';font-size:clamp(20px,6vw,28px);color:var(--brick);line-height:1.15;}
+  .drRow{animation:drIn .45s ease both;}
+  .clueRow.truth{background:#d8f5cf;border-width:4px;}
+  .drPick{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0;}
   /* ---- animated intro ---- */
   @keyframes introZoom { 0%{transform:scale(.3);opacity:0;} 55%{transform:scale(1.1);opacity:1;} 100%{transform:scale(1);opacity:1;} }
   @keyframes introUp { 0%{transform:translateY(40px);opacity:0;} 100%{transform:translateY(0);opacity:1;} }
@@ -175,6 +192,7 @@
       <button class="big gold" onclick="pickGame('quiz')">📖 Finish the Verse<br><span style="font-size:13px;font-family:Fredoka;font-weight:600">Classic verse quiz</span></button>
       <button class="big alt" onclick="pickGame('race')">🏁 Journey Race<br><span style="font-size:13px;font-family:Fredoka;font-weight:600">Race across the board by answering!</span></button>
       <button class="big" style="background:#e0465f;box-shadow:0 6px 0 #9c2238" onclick="pickGame('impostor')">🕵️ Bible Impostor<br><span style="font-size:13px;font-family:Fredoka;font-weight:600">Kẻ Giả Mạo: find who doesn't know the story!</span></button>
+      <button class="big" style="background:#ff8a2a;box-shadow:0 6px 0 #b35500" onclick="pickGame('draw')">🎨 Draw &amp; Guess<br><span style="font-size:13px;font-family:Fredoka;font-weight:600">Vẽ Đoán: draw it, guess it, fool your friends!</span></button>
     </div>
   </div>
 
@@ -186,6 +204,25 @@
       <div id="impMain"></div>
       <div class="clueList" id="impList"></div>
       <div id="impBtns" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- DRAW & GUESS: host / big screen -->
+  <div class="screen" id="drawScreen">
+    <div class="card">
+      <div class="qbig" id="drTitle">Draw &amp; Guess</div>
+      <div class="timer" id="drTimer" style="display:none">60</div>
+      <div id="drMain"></div>
+      <div class="clueList" id="drList"></div>
+      <div id="drBtns" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- DRAW & GUESS: player phone -->
+  <div class="screen" id="drawPhone">
+    <div class="card">
+      <div class="qbig" id="drPTitle">Draw &amp; Guess</div>
+      <div id="drPMain"></div>
     </div>
   </div>
 
@@ -1103,6 +1140,7 @@ function hostStartSelected(){
   if(!isHost) return;
   if(gameType==='race') hostStartRace();
   else if(gameType==='impostor') hostStartImpostor();
+  else if(gameType==='draw') hostStartDraw();
   else hostStartGame();
 }
 
@@ -2120,6 +2158,518 @@ socket.on('hostEvent',(evt)=>{
       '<div class="reveal" style="margin:8px 0">'+(mine?('+'+mine):'+0')+'</div>'+
       '<div class="clueList">'+(evt.scores||[]).slice(0,5).map((r,i)=>'<div class="clueRow"><span>'+(i+1)+'. '+esc(r.name)+'</span><span class="cw">'+r.score+'</span></div>').join('')+'</div>'+
       '<div class="waiting">Waiting for the host…</div>');
+  }
+});
+
+/* ============================================================================
+   DRAW & GUESS (Vẽ Đoán) — Drawful style, lag-proof.
+   1) Everyone draws their own secret prompt on their phone at the same time.
+   2) Each drawing is shown on the big screen; everyone else types a guess.
+      An exact guess scores right away; wrong guesses become TRAPS.
+   3) Everyone who missed votes for the real answer among the traps.
+      Fooling people with your trap earns points too.
+   Uses only the existing relays: host -> all ('hostEvent'), player -> host ('input').
+   ============================================================================ */
+const DRAW_EVERYDAY = [
+  {vi:"Con mèo", en:"Cat", acc:["meo","con meo","cat","kitty"]},
+  {vi:"Con chó", en:"Dog", acc:["cho","con cho","cun","con cun","dog","puppy"]},
+  {vi:"Xe máy", en:"Motorbike", acc:["xe may","xe gan may","motorbike","motorcycle","scooter"]},
+  {vi:"Ly cà phê", en:"Coffee cup", acc:["ca phe","ly ca phe","coc ca phe","tach ca phe","cafe","coffee","coffee cup","cup of coffee"]},
+  {vi:"Bánh mì", en:"Banh mi", acc:["banh mi","bread","sandwich","banh mi thit"]},
+  {vi:"Cây dù", en:"Umbrella", acc:["du","cay du","cai du","o","cai o","umbrella"]},
+  {vi:"Đồng hồ", en:"Clock", acc:["dong ho","clock","watch"]},
+  {vi:"Điện thoại", en:"Phone", acc:["dien thoai","phone","smartphone","iphone","cell phone"]},
+  {vi:"Mắt kính", en:"Glasses", acc:["=kinh","mat kinh","kinh mat","glasses","sunglasses"]},
+  {vi:"Cái ghế", en:"Chair", acc:["ghe","cai ghe","chair"]},
+  {vi:"Ngôi nhà", en:"House", acc:["=nha","ngoi nha","can nha","house","home"]},
+  {vi:"Mặt trời", en:"Sun", acc:["mat troi","sun"]},
+  {vi:"Quả chuối", en:"Banana", acc:["chuoi","qua chuoi","trai chuoi","banana"]},
+  {vi:"Con cá", en:"Fish", acc:["ca","con ca","fish"]},
+  {vi:"Xe đạp", en:"Bicycle", acc:["xe dap","bicycle","bike"]},
+  {vi:"Nón lá", en:"Conical hat", acc:["non la","=non","conical hat","vietnamese hat","hat"]},
+  {vi:"Đôi giày", en:"Shoes", acc:["giay","doi giay","shoe","shoes","sneaker","sneakers"]},
+  {vi:"Bánh sinh nhật", en:"Birthday cake", acc:["banh sinh nhat","banh kem","cake","birthday cake"]},
+  {vi:"Cái quạt", en:"Fan", acc:["quat","cai quat","quat may","fan"]},
+  {vi:"Tivi", en:"TV", acc:["tivi","ti vi","tv","television"]},
+  {vi:"Bàn chải đánh răng", en:"Toothbrush", acc:["ban chai","ban chai danh rang","toothbrush"]},
+  {vi:"Cây đàn guitar", en:"Guitar", acc:["guitar","dan guitar","=dan","cay dan","ghi ta","dan ghi ta"]},
+  {vi:"Quả bóng đá", en:"Soccer ball", acc:["=bong","qua bong","bong da","qua bong da","soccer ball","football","ball"]},
+  {vi:"Con gà", en:"Chicken", acc:["ga","con ga","chicken","rooster","hen"]},
+  {vi:"Cái kéo", en:"Scissors", acc:["keo","cai keo","scissors"]},
+  {vi:"Bóng đèn", en:"Light bulb", acc:["bong den","=den","light bulb","lightbulb","bulb"]},
+  {vi:"Ly trà sữa", en:"Bubble tea", acc:["tra sua","ly tra sua","bubble tea","milk tea","boba"]},
+  {vi:"Máy bay", en:"Airplane", acc:["may bay","airplane","plane","aeroplane"]},
+  {vi:"Chìa khóa", en:"Key", acc:["chia khoa","key"]},
+  {vi:"Ba lô", en:"Backpack", acc:["ba lo","balo","backpack","bag"]},
+  {vi:"Con voi", en:"Elephant", acc:["=voi","con voi","elephant"]},
+  {vi:"Cây kem", en:"Ice cream", acc:["=kem","cay kem","ice cream","icecream"]},
+  {vi:"Cây thông Noel", en:"Christmas tree", acc:["cay thong","cay thong noel","thong noel","christmas tree","xmas tree"]},
+  {vi:"Bánh pizza", en:"Pizza", acc:["pizza","banh pizza"]},
+  {vi:"Tô phở", en:"Bowl of pho", acc:["pho","to pho","bowl of pho"]},
+  {vi:"Đôi đũa", en:"Chopsticks", acc:["=dua","doi dua","chopsticks","chopstick"]},
+  {vi:"Nồi cơm điện", en:"Rice cooker", acc:["noi com","noi com dien","rice cooker"]},
+  {vi:"Cái laptop", en:"Laptop", acc:["laptop","may tinh","may tinh xach tay","computer"]},
+  {vi:"Con bướm", en:"Butterfly", acc:["buom","con buom","butterfly"]},
+  {vi:"Xe ô tô", en:"Car", acc:["o to","xe o to","xe hoi","car"]},
+];
+const DRAW_BIBLE = [
+  {vi:"Con tàu của Nô-ê", en:"Noah's Ark", acc:["tau no e","con tau no e","tau noe","no e","noe","con tau","noah","ark","noah ark","noahs ark"]},
+  {vi:"Giô-na và con cá lớn", en:"Jonah and the big fish", acc:["gio na","giona","jonah","ca lon","con ca lon","ca voi","whale","big fish"]},
+  {vi:"Đa-vít và Gô-li-át", en:"David and Goliath", acc:["da vit","david","go li at","goliath","na","cai na","slingshot"]},
+  {vi:"Bụi gai cháy", en:"The burning bush", acc:["bui gai","bui gai chay","bui gai boc chay","burning bush","bush on fire"]},
+  {vi:"Tháp Ba-bên", en:"The Tower of Babel", acc:["thap ba ben","thap babel","babel","tower of babel"]},
+  {vi:"Máng cỏ Giáng Sinh", en:"The manger", acc:["mang co","manger","giang sinh","nativity","baby jesus"]},
+  {vi:"Thập tự giá", en:"The cross", acc:["thap tu","thap tu gia","thap gia","thanh gia","cay thanh gia","cross"]},
+  {vi:"Ngôi mộ trống", en:"The empty tomb", acc:["mo trong","ngoi mo trong","ngoi mo","empty tomb","tomb","phuc sinh","resurrection"]},
+  {vi:"Năm cái bánh và hai con cá", en:"Five loaves and two fish", acc:["5 banh 2 ca","nam banh hai ca","banh va ca","nam cai banh hai con ca","five loaves","loaves and fish","bread and fish"]},
+  {vi:"Con chiên lạc", en:"The lost sheep", acc:["chien lac","con chien lac","con chien","con cuu","cuu lac","lost sheep","sheep"]},
+  {vi:"Đa-ni-ên trong hang sư tử", en:"Daniel in the lions' den", acc:["da ni en","daniel","hang su tu","su tu","lion","lions","lions den"]},
+  {vi:"Môi-se rẽ Biển Đỏ", en:"Moses parts the Red Sea", acc:["=moi se","=moses","bien do","re bien do","red sea","parting the red sea"]},
+  {vi:"Cầu vồng giao ước", en:"God's rainbow promise", acc:["cau vong","cau vong giao uoc","rainbow"]},
+  {vi:"A-đam, Ê-va và trái cấm", en:"Adam, Eve and the forbidden fruit", acc:["adam","eva","eve","trai cam","qua tao","=tao","apple","forbidden fruit","vuon e den","eden"]},
+  {vi:"Tường thành Giê-ri-cô", en:"The walls of Jericho", acc:["gie ri co","jericho","tuong thanh","walls of jericho"]},
+  {vi:"Chúa Giê-xu đi trên mặt nước", en:"Jesus walks on water", acc:["di tren mat nuoc","di tren nuoc","walk on water","walks on water","walking on water"]},
+  {vi:"Xa-chê trèo cây", en:"Zacchaeus climbs a tree", acc:["xa che","treo cay","zacchaeus","zaccheus"]},
+  {vi:"Bữa Tiệc Ly", en:"The Last Supper", acc:["tiec ly","bua tiec ly","last supper","bua toi cuoi cung"]},
+  {vi:"Ngôi sao Bết-lê-hem", en:"The star of Bethlehem", acc:["sao bet le hem","bet le hem","ngoi sao","sao","star","bethlehem","star of bethlehem"]},
+  {vi:"Mão gai", en:"The crown of thorns", acc:["mao gai","vuong mien gai","crown of thorns","thorns"]},
+  {vi:"Chim bồ câu", en:"The dove", acc:["bo cau","chim bo cau","dove","pigeon"]},
+  {vi:"Hai bảng đá Mười Điều Răn", en:"The Ten Commandments", acc:["muoi dieu ran","10 dieu ran","bang da","hai bang da","ten commandments","10 commandments","commandments"]},
+  {vi:"Áo nhiều màu của Giô-sép", en:"Joseph's colorful coat", acc:["ao nhieu mau","gio sep","joseph","colorful coat","coat of many colors"]},
+  {vi:"Người Sa-ma-ri nhân lành", en:"The Good Samaritan", acc:["sa ma ri","nguoi sa ma ri","samaritan","good samaritan"]},
+  {vi:"Nhà xây trên đá", en:"The house on the rock", acc:["nha tren da","nha xay tren da","house on the rock","house on rock"]},
+  {vi:"Hột cải", en:"The mustard seed", acc:["hot cai","hat cai","mustard seed","mustard"]},
+  {vi:"Chúa Giê-xu dẹp yên bão tố", en:"Jesus calms the storm", acc:["=bao","bao to","dep yen bao","storm","calms the storm","calm the storm"]},
+  {vi:"Sam-sôn tóc dài", en:"Samson's long hair", acc:["sam son","samson","toc dai","long hair"]},
+  {vi:"Nước hóa thành rượu", en:"Water into wine", acc:["hoa ruou","nuoc hoa ruou","ruou","ruou nho","water into wine","wine"]},
+  {vi:"Cây gậy hóa rắn của Môi-se", en:"Moses' staff becomes a snake", acc:["gay hoa ran","=ran","con ran","snake","staff","cay gay"]},
+];
+const DR_DRAW_SEC=80, DR_GUESS_SEC=45, DR_VOTE_SEC=30;
+let dr={active:false, theme:'mix', lang:'vi', round:0, used:[], prompt:{}, pics:{}, queue:[], shown:0, total:0,
+  cur:null, guesses:{}, correct:{}, options:[], voters:[], votes:{}, phase:''};
+let drTimerInt=null, drTimeLeft=0, drRevealTimers=[];
+
+/* lowercase, strip Vietnamese accents and punctuation: "Con Mèo!" -> "con meo" */
+function drNorm(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/đ/g,'d').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+function drPromptObj(key){ const [pool,i]=key.split(':'); return (pool==='b'?DRAW_BIBLE:DRAW_EVERYDAY)[+i]; }
+function drLabel(p, lang){ return (lang||dr.lang)==='en' ? p.en : p.vi; }
+/* does a typed guess match the prompt? exact match, or contains a whole accepted phrase (3+ letters) */
+/* an accepted phrase starting with "=" only counts as an exact match ("voi" must not match "ca voi") */
+function drIsCorrect(guess, p){
+  const g=drNorm(guess); if(!g) return false;
+  const accs=p.acc.map(a=>a.charAt(0)==='=' ? {t:drNorm(a.slice(1)), exact:true} : {t:drNorm(a), exact:false})
+    .concat([{t:drNorm(p.vi),exact:false},{t:drNorm(p.en),exact:false}]).filter(a=>a.t);
+  return accs.some(a => g===a.t || (!a.exact && a.t.length>=3 && (' '+g+' ').includes(' '+a.t+' ')));
+}
+function drNice(t){ t=String(t||'').replace(/\s+/g,' ').trim(); return t ? t.charAt(0).toUpperCase()+t.slice(1) : t; }
+
+/* ---------- host: screen helpers ---------- */
+function drSetTitle(t){ document.getElementById('drTitle').textContent=t; }
+function drMain(h){ document.getElementById('drMain').innerHTML=h; }
+function drList(h){ document.getElementById('drList').innerHTML=h; }
+function drButtons(list){
+  const box=document.getElementById('drBtns'); box.innerHTML='';
+  list.forEach(([label,cls,fn])=>{ const b=document.createElement('button');
+    b.className='big '+cls; b.textContent=label; b.onclick=fn; box.appendChild(b); });
+}
+function drStartTimer(sec,onEnd){
+  const el=document.getElementById('drTimer');
+  drTimeLeft=sec; el.style.display='block'; el.textContent=sec; el.classList.remove('low');
+  clearInterval(drTimerInt);
+  drTimerInt=setInterval(()=>{ drTimeLeft--; el.textContent=Math.max(0,drTimeLeft);
+    el.classList.toggle('low',drTimeLeft<=5);
+    if(drTimeLeft<=0){ clearInterval(drTimerInt); onEnd(); } },1000);
+}
+function drStopTimer(){ clearInterval(drTimerInt); document.getElementById('drTimer').style.display='none'; }
+function drJoiners(){ return Object.keys(players).filter(id=>id!==myId); }
+
+/* ---------- host: setup (theme + answer language) ---------- */
+function hostStartDraw(){
+  if(!isHost) return;
+  if(drJoiners().length<2){ alert('Need at least 2 players to start (best with 3 or more).'); return; }
+  scores={}; drJoiners().forEach(id=>scores[id]=0);
+  dr.active=true; dr.round=0; dr.used=[];
+  show('drawScreen'); drStopTimer(); drRenderSetup();
+}
+function drRenderSetup(){
+  drSetTitle('🎨 Draw & Guess · Vẽ Đoán');
+  drMain('<p class="sub">Everyone draws a secret word. Then guess the drawings and fool each other with fake answers!</p>'+
+    '<div class="impCat">Answers shown in:</div><div class="drPick" id="drLangPick"></div>'+
+    '<div class="impCat" style="margin-top:10px">Pick a theme to start:</div>');
+  const pick=document.getElementById('drLangPick');
+  [['vi','Tiếng Việt'],['en','English']].forEach(([k,label])=>{
+    const b=document.createElement('button'); b.className='drTool'+(dr.lang===k?' on':''); b.textContent=label;
+    b.onclick=()=>{ dr.lang=k; drRenderSetup(); }; pick.appendChild(b); });
+  drList('');
+  drButtons([['🏠 Everyday things · Đồ vật quanh ta','gold',()=>{dr.theme='everyday'; drNewRound();}],
+    ['📖 Bible · Kinh Thánh','alt',()=>{dr.theme='bible'; drNewRound();}],
+    ['🎲 Mixed · Trộn cả hai','',()=>{dr.theme='mix'; drNewRound();}]]);
+}
+function drPickPrompt(){
+  let pool=[];
+  if(dr.theme!=='bible') pool=pool.concat(DRAW_EVERYDAY.map((x,i)=>'e:'+i));
+  if(dr.theme!=='everyday') pool=pool.concat(DRAW_BIBLE.map((x,i)=>'b:'+i));
+  let free=pool.filter(k=>!dr.used.includes(k));
+  if(!free.length){ dr.used=dr.used.filter(k=>!pool.includes(k)); free=pool.slice(); }
+  const k=free[Math.floor(Math.random()*free.length)]; dr.used.push(k); return k;
+}
+
+/* ---------- host: drawing phase ---------- */
+function drNewRound(){
+  const js=drJoiners();
+  if(js.length<2){ alert('Need at least 2 players for a round.'); return; }
+  js.forEach(id=>{ if(!(id in scores)) scores[id]=0; });
+  dr.round++; dr.prompt={}; dr.pics={}; dr.phase='draw';
+  const assign={};
+  js.forEach(id=>{ const k=drPickPrompt(); dr.prompt[id]=k; const p=drPromptObj(k); assign[id]={vi:p.vi,en:p.en}; });
+  socket.emit('hostEvent',{ t:'drDraw', round:dr.round, assign, lang:dr.lang, seconds:DR_DRAW_SEC });
+  show('drawScreen');
+  drSetTitle('Round '+dr.round+' · Everyone is drawing ✏️');
+  drMain('<div class="big-emoji">🎨</div><p class="sub">Check your phone and draw your secret word!<br>'+
+    '<span style="font-size:13px">No letters or numbers allowed 😉</span></p>');
+  drRenderDrawStatus(); drButtons([]);
+  drStartTimer(DR_DRAW_SEC, drDrawTimeUp);
+}
+function drRenderDrawStatus(){
+  drList(Object.keys(dr.prompt).filter(id=>players[id]||dr.pics[id]).map(id=>'<div class="clueRow">'+impAvatar(id)+
+    '<span>'+esc(pname(id))+'</span><span class="cw'+(dr.pics[id]?'':' dim')+'">'+(dr.pics[id]?'done ✓':'drawing…')+'</span></div>').join(''));
+}
+function drDrawTimeUp(){
+  if(dr.phase!=='draw') return;
+  dr.phase='collect'; drStopTimer();
+  socket.emit('hostEvent',{ t:'drTimeUp', round:dr.round });
+  drSetTitle('Time is up! Collecting drawings…');
+  setTimeout(drStartShowcase, 2500);   // give phones a moment to auto-send
+}
+function drStartShowcase(){
+  if(dr.phase!=='draw' && dr.phase!=='collect') return;
+  drStopTimer();
+  dr.queue=shuffle(Object.keys(dr.pics)); dr.total=dr.queue.length; dr.shown=0;
+  if(!dr.queue.length){
+    dr.phase='roundEnd';
+    drSetTitle('No drawings this round 😅'); drMain(''); drList('');
+    drButtons([['Try Again ▶','gold',drNewRound],['Final Scores 🏆','alt',drFinal]]);
+    return;
+  }
+  drNextDrawing();
+}
+
+/* ---------- host: guessing phase ---------- */
+function drNextDrawing(){
+  drRevealTimers.forEach(clearTimeout); drRevealTimers=[];
+  if(!dr.queue.length){ drRoundSummary(); return; }
+  const id=dr.queue.shift(); dr.shown++;
+  dr.cur=id; dr.guesses={}; dr.correct={}; dr.votes={}; dr.options=[]; dr.voters=[]; dr.phase='guess';
+  socket.emit('hostEvent',{ t:'drShow', round:dr.round, artistId:id, artistName:pname(id), img:dr.pics[id],
+    n:dr.shown, total:dr.total, seconds:DR_GUESS_SEC });
+  drSetTitle('Drawing '+dr.shown+' of '+dr.total+' · What is it? 🤔');
+  drMain('<img class="drImg" src="'+dr.pics[id]+'"><p class="sub" style="margin:4px 0">by <b>'+esc(pname(id))+'</b></p>'+
+    '<p class="impHint">Type your guess on your phone. A wrong guess becomes a trap for the others!</p>');
+  drRenderGuessStatus(); drButtons([]);
+  drStartTimer(DR_GUESS_SEC, drStartVote);
+}
+function drGuessers(){ return drJoiners().filter(id=>id!==dr.cur); }
+function drRenderGuessStatus(){
+  drList(drGuessers().map(id=>{
+    const st = dr.correct[id] ? 'got it! 🎯' : (dr.guesses[id]!==undefined ? 'guessed ✓' : '…');
+    return '<div class="clueRow">'+impAvatar(id)+'<span>'+esc(pname(id))+'</span><span class="cw'+(st==='…'?' dim':'')+'">'+st+'</span></div>';
+  }).join(''));
+}
+function drAcceptGuess(id, text){
+  if(dr.phase!=='guess' || id===dr.cur || !players[id]) return;
+  if(dr.correct[id] || dr.guesses[id]!==undefined) return;
+  text=String(text||'').replace(/\s+/g,' ').trim().slice(0,30);
+  if(!text) return;
+  if(drIsCorrect(text, drPromptObj(dr.prompt[dr.cur]))){
+    dr.correct[id]=true;
+    socket.emit('hostEvent',{ t:'drGotIt', round:dr.round, id });
+  } else dr.guesses[id]=text;
+  drRenderGuessStatus();
+  if(drGuessers().every(g=>dr.correct[g] || dr.guesses[g]!==undefined)) setTimeout(drStartVote, 700);
+}
+
+/* ---------- host: voting phase ---------- */
+function drStartVote(){
+  if(dr.phase!=='guess') return;
+  drStopTimer();
+  const p=drPromptObj(dr.prompt[dr.cur]);
+  const truth=drLabel(p);
+  const groups={};
+  Object.entries(dr.guesses).forEach(([id,txt])=>{
+    const k=drNorm(txt); if(!k || k===drNorm(truth)) return;
+    (groups[k]=groups[k]||{text:drNice(txt), authors:[]}).authors.push(id);
+  });
+  const opts=[{text:truth, real:true, authors:[]}].concat(Object.values(groups).map(g=>({text:g.text, real:false, authors:g.authors})));
+  /* always at least 3 choices: top up with "game decoys" from the same theme so nobody gets a free vote */
+  const taken=new Set(opts.map(o=>drNorm(o.text)));
+  const decoys=(dr.prompt[dr.cur].charAt(0)==='b'?DRAW_BIBLE:DRAW_EVERYDAY).map(x=>drLabel(x)).filter(t=>!taken.has(drNorm(t)));
+  while(opts.length<3 && decoys.length) opts.push({text:decoys.splice(Math.floor(Math.random()*decoys.length),1)[0], real:false, authors:[], house:true});
+  dr.options=shuffle(opts);
+  dr.voters=drGuessers().filter(id=>!dr.correct[id] && players[id]);
+  dr.votes={};
+  if(!dr.voters.length || dr.options.length<2){ drReveal(); return; }
+  dr.phase='vote';
+  const own={};
+  dr.voters.forEach(v=>{ own[v]=dr.options.map((o,i)=>o.authors.includes(v)?i:-1).filter(i=>i>=0); });
+  socket.emit('hostEvent',{ t:'drVote', round:dr.round, options:dr.options.map(o=>o.text), voters:dr.voters, own, seconds:DR_VOTE_SEC });
+  drSetTitle('Which one is the REAL answer? 🗳️');
+  drMain('<img class="drImg small" src="'+dr.pics[dr.cur]+'"><p class="impHint">Vote on your phone. Your own trap is hidden from you.</p>');
+  drList(dr.options.map(o=>'<div class="clueRow"><span style="font-size:clamp(16px,4.6vw,22px)">'+esc(o.text)+'</span></div>').join(''));
+  drButtons([]);
+  drStartTimer(DR_VOTE_SEC, drReveal);
+}
+function drAcceptVote(id, opt){
+  if(dr.phase!=='vote' || !dr.voters.includes(id) || dr.votes[id]!==undefined) return;
+  opt=Number(opt);
+  if(!(opt>=0 && opt<dr.options.length) || dr.options[opt].authors.includes(id)) return;
+  dr.votes[id]=opt;
+  if(dr.voters.filter(v=>players[v]).every(v=>dr.votes[v]!==undefined)) setTimeout(drReveal, 600);
+}
+
+/* ---------- host: reveal + scoring ---------- */
+function drReveal(){
+  if(dr.phase!=='guess' && dr.phase!=='vote') return;
+  dr.phase='reveal'; drStopTimer(); drButtons([]);
+  const artist=dr.cur, gains={};
+  const add=(id,n)=>{ gains[id]=(gains[id]||0)+n; };
+  const correctTypers=Object.keys(dr.correct);
+  correctTypers.forEach(id=>{ add(id,1000); add(artist,500); });
+  const votersOf=i=>Object.keys(dr.votes).filter(v=>dr.votes[v]===i);
+  dr.options.forEach((o,i)=>{
+    const vs=votersOf(i);
+    if(o.real) vs.forEach(v=>{ add(v,500); add(artist,250); });
+    else o.authors.forEach(a=>add(a,500*vs.length));
+  });
+  Object.entries(gains).forEach(([id,n])=>{ if(id in scores) scores[id]+=n; else scores[id]=n; });
+
+  const truthIdx=dr.options.findIndex(o=>o.real);
+  const fakes=dr.options.map((o,i)=>({o,i,vs:votersOf(i)})).filter(x=>!x.o.real).sort((a,b)=>a.vs.length-b.vs.length);
+  const truth={o:dr.options[truthIdx]||{text:drLabel(drPromptObj(dr.prompt[artist])),real:true,authors:[]}, vs:truthIdx>=0?votersOf(truthIdx):[]};
+  const names=ids=>ids.map(id=>esc(pname(id))).join(', ');
+
+  drSetTitle('The answers are…');
+  drMain('<img class="drImg small" src="'+dr.pics[artist]+'">');
+  drList('');
+  const box=document.getElementById('drList');
+  let delay=400;
+  fakes.forEach(x=>{
+    drRevealTimers.push(setTimeout(()=>{
+      box.insertAdjacentHTML('beforeend','<div class="clueRow drRow" style="flex-wrap:wrap"><span>❌ '+esc(x.o.text)+'</span>'+
+        '<span class="cw" style="font-size:12px">'+(x.o.house?'game decoy 🤖':'trap by '+names(x.o.authors))+'</span>'+
+        '<div style="width:100%;font-size:13px;opacity:.8">'+(x.vs.length?('fooled: '+names(x.vs)+' 😂'):'fooled nobody')+'</div></div>');
+    }, delay));
+    delay+=1400;
+  });
+  drRevealTimers.push(setTimeout(()=>{
+    impDrumroll();
+  }, delay));
+  delay+=1600;
+  drRevealTimers.push(setTimeout(()=>{
+    box.insertAdjacentHTML('beforeend','<div class="clueRow truth drRow" style="flex-wrap:wrap"><span style="font-size:clamp(17px,5vw,24px)">✅ '+esc(truth.o.text)+'</span>'+
+      '<span class="cw" style="font-size:12px">THE TRUTH</span>'+
+      '<div style="width:100%;font-size:13px">'+
+        (correctTypers.length?('🎯 typed it: '+names(correctTypers)+'<br>'):'')+
+        (truth.vs.length?('🗳️ voted for it: '+names(truth.vs)):(correctTypers.length?'':'Nobody found it 😅'))+
+      '</div></div>');
+    const sorted=Object.entries(gains).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]);
+    if(sorted.length) box.insertAdjacentHTML('beforeend','<div class="impHint drRow" style="margin-top:6px">'+
+      sorted.map(([id,n])=>esc(pname(id))+' +'+n).join(' · ')+'</div>');
+    socket.emit('hostEvent',{ t:'drReveal', round:dr.round, artistId:artist, truth:truth.o.text, gains,
+      fooled:Object.fromEntries(fakes.map(x=>[x.o.authors.join(','), x.vs.length])) });
+    drButtons([[dr.queue.length?'Next Drawing ▶':'Round Results ▶','gold',drNextDrawing]]);
+  }, delay));
+}
+
+/* ---------- host: round end + final ---------- */
+function drRoundSummary(){
+  dr.phase='roundEnd'; drStopTimer();
+  const sb=scoreboard();
+  socket.emit('hostEvent',{ t:'drRound', round:dr.round, scores:sb });
+  drSetTitle('Round '+dr.round+' results 🏆');
+  drMain('');
+  drList(sb.map((r,i)=>'<div class="clueRow"><span style="font-family:Bungee;color:var(--brick)">'+(i+1)+'</span>'+
+    impAvatar(r.id)+'<span>'+esc(r.name)+'</span><span class="cw">'+r.score+'</span></div>').join(''));
+  drButtons([['Next Round ▶','gold',drNewRound],['Change Theme 🔁','alt',drRenderSetup],['Final Scores 🏆','',drFinal]]);
+}
+function drFinal(){
+  dr.active=false; dr.phase=''; drStopTimer(); drRevealTimers.forEach(clearTimeout);
+  socket.emit('hostEvent',{ t:'final', scores:scoreboard(), photos:playerPhotos });
+  showFinal(scoreboard(), playerPhotos);
+}
+
+/* host collects drawings, guesses and votes */
+socket.on('input',({id,state})=>{
+  if(!isHost || !dr.active || !state || state.round!==dr.round) return;
+  if(state.t==='drPic' && (dr.phase==='draw' || dr.phase==='collect') && dr.prompt[id] && !dr.pics[id]){
+    const img=String(state.img||'');
+    if(img.indexOf('data:image/')!==0 || img.length>600000) return;
+    dr.pics[id]=img; drRenderDrawStatus();
+    const need=Object.keys(dr.prompt).filter(x=>players[x]);
+    if(dr.phase==='draw' && need.every(x=>dr.pics[x])) setTimeout(drStartShowcase, 700);
+  }
+  else if(state.t==='drGuess' && state.artist===dr.cur) drAcceptGuess(id, state.text);
+  else if(state.t==='drVoteCast' && state.artist===dr.cur) drAcceptVote(id, state.opt);
+});
+/* someone left: don't wait for them */
+socket.on('playerList',()=>{
+  if(!isHost || !dr.active) return;
+  setTimeout(()=>{
+    if(dr.phase==='draw'){ drRenderDrawStatus(); const need=Object.keys(dr.prompt).filter(x=>players[x]);
+      if(need.length && need.every(x=>dr.pics[x])) drStartShowcase(); }
+    if(dr.phase==='guess'){ drRenderGuessStatus(); const g=drGuessers();
+      if(g.every(x=>dr.correct[x] || dr.guesses[x]!==undefined)) drStartVote(); }
+    if(dr.phase==='vote'){ const v=dr.voters.filter(x=>players[x]);
+      if(v.every(x=>dr.votes[x]!==undefined)) drReveal(); }
+  },50);
+});
+
+/* ---------- player phone: drawing pad ---------- */
+const DR_COLORS=['#1d1b3a','#e74c3c','#2e86de','#27ae60','#f1c40f','#e67e22','#8e5a2b','#ff6b9d'];
+let drPad={cv:null, ctx:null, strokes:[], cur:null, color:'#1d1b3a', size:7, erase:false};
+let drRoundJ=0, drSentPic=false, drMyPrompt=null, drPTimer=null, drSentGuess=false, drArtistJ=null, drImgJ='';
+function drPMain(h){ document.getElementById('drPMain').innerHTML=h; }
+function drPTitle(t){ document.getElementById('drPTitle').textContent=t; }
+function drPhoneCountdown(sec){
+  clearInterval(drPTimer);
+  let left=sec; const tick=()=>{ const el=document.getElementById('drPCount'); if(!el){ clearInterval(drPTimer); return; }
+    el.textContent='⏱ '+Math.max(0,left)+'s'; left--; if(left<0) clearInterval(drPTimer); };
+  tick(); drPTimer=setInterval(tick,1000);
+}
+function drRedraw(){
+  const g=drPad.ctx; if(!g) return;
+  g.fillStyle='#ffffff'; g.fillRect(0,0,400,400);
+  drPad.strokes.forEach(st=>{
+    g.strokeStyle=st.c; g.fillStyle=st.c; g.lineWidth=st.s; g.lineCap='round'; g.lineJoin='round';
+    if(st.p.length===1){ g.beginPath(); g.arc(st.p[0][0],st.p[0][1],st.s/2,0,7); g.fill(); return; }
+    g.beginPath(); g.moveTo(st.p[0][0],st.p[0][1]);
+    for(let i=1;i<st.p.length;i++) g.lineTo(st.p[i][0],st.p[i][1]);
+    g.stroke();
+  });
+}
+function drBuildPad(container){
+  const cv=document.createElement('canvas'); cv.width=400; cv.height=400; cv.className='drCanvas'; cv.id='drCanvas';
+  container.appendChild(cv);
+  drPad.cv=cv; drPad.ctx=cv.getContext('2d'); drPad.strokes=[]; drPad.cur=null; drRedraw();
+  const pt=e=>{ const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*400/r.width,(e.clientY-r.top)*400/r.height]; };
+  cv.addEventListener('pointerdown',e=>{ if(drSentPic) return; e.preventDefault();
+    try{ cv.setPointerCapture(e.pointerId); }catch(x){}
+    drPad.cur={c:drPad.erase?'#ffffff':drPad.color, s:drPad.erase?drPad.size*2.5:drPad.size, p:[pt(e)]};
+    drPad.strokes.push(drPad.cur); drRedraw(); });
+  cv.addEventListener('pointermove',e=>{ if(!drPad.cur) return; e.preventDefault();
+    const p=pt(e), st=drPad.cur, last=st.p[st.p.length-1]; st.p.push(p);
+    const g=drPad.ctx; g.strokeStyle=st.c; g.lineWidth=st.s; g.lineCap='round'; g.lineJoin='round';
+    g.beginPath(); g.moveTo(last[0],last[1]); g.lineTo(p[0],p[1]); g.stroke(); });
+  const end=()=>{ drPad.cur=null; };
+  cv.addEventListener('pointerup',end); cv.addEventListener('pointercancel',end); cv.addEventListener('pointerleave',end);
+
+  const tools=document.createElement('div'); tools.className='drTools'; container.appendChild(tools);
+  DR_COLORS.forEach(c=>{ const b=document.createElement('button'); b.className='drSw'+(c===drPad.color&&!drPad.erase?' on':'');
+    b.style.background=c; b.setAttribute('aria-label','color '+c);
+    b.onclick=()=>{ drPad.color=c; drPad.erase=false; tools.querySelectorAll('.drSw').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+      const er=document.getElementById('drEraser'); if(er) er.classList.remove('on'); };
+    tools.appendChild(b); });
+  const tools2=document.createElement('div'); tools2.className='drTools'; container.appendChild(tools2);
+  [['S',4],['M',8],['L',16]].forEach(([l,n])=>{ const b=document.createElement('button'); b.className='drTool drSize'+(drPad.size===n?' on':'');
+    b.textContent=l; b.onclick=()=>{ drPad.size=n; tools2.querySelectorAll('.drSize').forEach(x=>x.classList.remove('on')); b.classList.add('on'); };
+    tools2.appendChild(b); });
+  const er=document.createElement('button'); er.className='drTool'; er.id='drEraser'; er.textContent='🧽 Eraser';
+  er.onclick=()=>{ drPad.erase=!drPad.erase; er.classList.toggle('on',drPad.erase); }; tools2.appendChild(er);
+  const un=document.createElement('button'); un.className='drTool'; un.textContent='↶ Undo';
+  un.onclick=()=>{ drPad.strokes.pop(); drRedraw(); }; tools2.appendChild(un);
+  const cl=document.createElement('button'); cl.className='drTool'; cl.textContent='🗑 Clear';
+  cl.onclick=()=>{ if(drPad.strokes.length && confirm('Clear your whole drawing?')){ drPad.strokes=[]; drRedraw(); } }; tools2.appendChild(cl);
+}
+function drSendPic(auto){
+  if(drSentPic || !drPad.ctx) return;
+  drSentPic=true; clearInterval(drPTimer);
+  drRedraw();
+  const img=drPad.cv.toDataURL('image/jpeg',0.7);
+  socket.emit('input',{ t:'drPic', round:drRoundJ, img });
+  drPTitle(auto?'Time is up! ⏰':'Drawing sent ✓');
+  drPMain('<img class="drImg small" src="'+img+'"><div class="waiting">Nice! Waiting for the others to finish…</div>');
+}
+function drSendGuess(){
+  if(drSentGuess) return;
+  const inp=document.getElementById('drGuessInput'); if(!inp) return;
+  const v=inp.value.trim(); if(!v){ inp.focus(); return; }
+  drSentGuess=true; clearInterval(drPTimer);
+  socket.emit('input',{ t:'drGuess', round:drRoundJ, artist:drArtistJ, text:v.slice(0,30) });
+  drPMain('<div class="waiting">Guess locked in: <b>'+esc(v)+'</b> ✓<br>If it\'s wrong, it becomes a trap for the others 😏</div>');
+}
+
+/* ---------- player phone: events from the host ---------- */
+socket.on('hostEvent',(evt)=>{
+  if(isHost || !evt || typeof evt.t!=='string' || evt.t.indexOf('dr')!==0) return;
+  if(evt.t!=='drDraw' && evt.round!==drRoundJ) return;
+  if(evt.t==='drDraw'){
+    clearInterval(drPTimer);
+    drRoundJ=evt.round; drSentPic=false; drPad.ctx=null;
+    drMyPrompt=(evt.assign||{})[myId]||null;
+    show('drawPhone');
+    if(!drMyPrompt){ drPTitle('Round '+evt.round); drPMain('<div class="waiting">You joined mid-round. You will draw next round 👀</div>'); return; }
+    const main=evt.lang==='en'?drMyPrompt.en:drMyPrompt.vi, other=evt.lang==='en'?drMyPrompt.vi:drMyPrompt.en;
+    drPTitle('Draw this! 🤫');
+    drPMain('<div class="drPrompt">'+esc(main)+'</div><div class="impHint" style="margin-top:2px">'+esc(other)+' · no letters or numbers!</div>'+
+      '<div id="drPadBox"></div><button class="big gold" id="drDoneBtn">Done ✓</button><div class="waiting" id="drPCount"></div>');
+    drBuildPad(document.getElementById('drPadBox'));
+    document.getElementById('drDoneBtn').onclick=()=>drSendPic(false);
+    drPhoneCountdown(evt.seconds||80);
+  }
+  else if(evt.t==='drTimeUp'){
+    if(drMyPrompt && !drSentPic) drSendPic(true);
+  }
+  else if(evt.t==='drShow'){
+    clearInterval(drPTimer);
+    drArtistJ=evt.artistId; drImgJ=evt.img||''; drSentGuess=false; show('drawPhone');
+    if(evt.artistId===myId){
+      drPTitle('This is YOUR drawing! 🤐');
+      drPMain('<img class="drImg small" src="'+evt.img+'"><div class="waiting">Stay quiet and watch them guess 😏</div>');
+      return;
+    }
+    drPTitle('Drawing '+evt.n+' of '+evt.total+' · by '+evt.artistName);
+    drPMain('<img class="drImg small" src="'+evt.img+'">'+
+      '<p class="sub" style="margin:4px 0">What is it? · Đây là gì?</p>'+
+      '<input class="txt" id="drGuessInput" maxlength="30" autocomplete="off" placeholder="your guess">'+
+      '<button class="big gold" id="drGuessBtn">Send ▶</button><div class="waiting" id="drPCount"></div>');
+    const inp=document.getElementById('drGuessInput');
+    document.getElementById('drGuessBtn').onclick=drSendGuess;
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') drSendGuess(); });
+    setTimeout(()=>inp.focus(),100);
+    drPhoneCountdown(evt.seconds||45);
+  }
+  else if(evt.t==='drGotIt'){
+    if(evt.id===myId){ drPTitle('You got it! 🎯'); drPMain('<div class="reveal">+1000</div><div class="waiting">Shh! Don\'t tell the others 🤫</div>'); }
+  }
+  else if(evt.t==='drVote'){
+    clearInterval(drPTimer);
+    if(drArtistJ===myId){ drPTitle('Your drawing 🎨'); drPMain('<div class="waiting">Everyone is voting on your drawing…</div>'); return; }
+    if(!(evt.voters||[]).includes(myId)){ drPTitle('Voting 🗳️'); drPMain('<div class="waiting">You already got it! Watch the vote 👀</div>'); return; }
+    drPTitle('Which is the REAL answer? 🗳️');
+    const box=document.getElementById('drPMain');
+    box.innerHTML=(drImgJ?'<img class="drImg small" style="max-width:170px" src="'+drImgJ+'">':'')+'<div class="waiting" id="drPCount"></div>';
+    const own=(evt.own||{})[myId]||[];
+    evt.options.forEach((txt,i)=>{
+      if(own.includes(i)) return;
+      const b=document.createElement('button'); b.className='big alt'; b.textContent=txt;
+      b.onclick=()=>{ socket.emit('input',{ t:'drVoteCast', round:drRoundJ, artist:drArtistJ, opt:i });
+        drPMain('<div class="waiting">You voted: <b>'+esc(txt)+'</b> ✓</div>'); };
+      box.appendChild(b);
+    });
+    drPhoneCountdown(evt.seconds||30);
+  }
+  else if(evt.t==='drReveal'){
+    const mine=(evt.gains||{})[myId]||0;
+    drPTitle('It was…');
+    drPMain('<div class="drPrompt">'+esc(evt.truth)+'</div><div class="reveal" style="margin:8px 0">'+(mine?('+'+mine):'+0')+'</div>'+
+      '<div class="waiting">Look at the big screen 👀</div>');
+  }
+  else if(evt.t==='drRound'){
+    drPTitle('Round '+evt.round+' results 🏆');
+    drPMain('<div class="clueList">'+(evt.scores||[]).slice(0,6).map((r,i)=>'<div class="clueRow"><span>'+(i+1)+'. '+esc(r.name)+'</span>'+
+      '<span class="cw">'+r.score+'</span></div>').join('')+'</div><div class="waiting">Waiting for the host…</div>');
   }
 });
 
